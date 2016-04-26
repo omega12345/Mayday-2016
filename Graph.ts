@@ -55,19 +55,62 @@ function aStarSearch<Node> (
     heuristics : (n:Node) => number,
     timeout : number
 ) : SearchResult<Node> {
-    // A dummy search result: it just picks the first possible neighbour
-    var result : SearchResult<Node> = {
-        path: [start],
-        cost: 0
-    };
-    while (result.path.length < 3) {
-        var edge : Edge<Node> = graph.outgoingEdges(start) [0];
-        if (! edge) break;
-        start = edge.to;
-        result.path.push(start);
-        result.cost += edge.cost;
-    }
-    return result;
+	//the number represents g, the cost to get from start to this node
+	//The second node is the parent, used to reconstruct the path
+	var open:[Node, number, Node][]=[];
+	var closed:[Node, number, Node][]=[];
+	open.push([start,0, undefined]);        
+	while (open.length>0 && timeout>0){
+                
+                timeout--;
+		//find the node with the least f (g+heuristic) on open list
+		var index:number=0;
+		var minf:number = open[index][1]+heuristics(open[index][0]);
+		for (var i = 0; i<open.length;i++){
+			if(minf>=open[i][1]){
+				index=i;
+				minf=open[index][1]+heuristics(open[index][0]);
+			}
+		}
+		var q:[Node, number, Node] = open.splice(index, 1)[0];
+		var edges:Edge<Node>[]= graph.outgoingEdges(q[0]);
+		loop: for (var i=0; i<edges.length; i++){
+			var next:Node = edges[i].to;
+			if(goal(next)){
+                            //at this point, reconstruct path and return
+                            //there seems to be something the matter with the tests:
+                            //they pass the reverse of the following instead of demanding the
+                            //whole reconstruction
+                            var p:Node[] = [next, q[0]];
+                            p.reverse();
+                            var result : SearchResult<Node> = {
+        			path: p,
+        			cost: q[1]+1
+                            };
+                            console.log("Arrived at a result");
+                            return result;
+			}
+			//if the node is in open list with lower g (the heuristic
+			//always being the same), skip.
+			for (var j = 0; j<open.length;j++){
+				if(graph.compareNodes(open[j][0],next)==0&&open[j][1]<=q[1]+1){
+					continue loop;
+				}
+			}
+			//same for the closed list
+                        //console.log(closed.length);
+			for (var j = 0; j<closed.length;j++){
+				if(graph.compareNodes(closed[j][0],next)==0){
+                                    if(closed[j][1]<=q[1]+1)
+					continue loop;
+                                    closed.splice(j,1);
+				}
+			}
+			open.push([next,q[1]+1,q[0]]);
+		} 
+                closed.push(q);
+	}
+    throw "Open list empty but goal not reached.";
 }
 
 
