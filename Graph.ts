@@ -82,12 +82,21 @@ function aStarSearch<Node> (
                             //they pass the reverse of the following instead of demanding the
                             //whole reconstruction
                             var p:Node[] = [next, q[0]];
+                            next=q[2];
+                            while(next){
+                                p.push(next);
+                                for (var i =0; i<closed.length; i++){
+                                    if(closed[i][0]==next){
+                                        next=closed[i][2];
+                                        break;
+                                    }
+                                }
+                            }
                             p.reverse();
                             var result : SearchResult<Node> = {
         			path: p,
         			cost: q[1]+1
                             };
-                            console.log("Arrived at a result");
                             return result;
 			}
 			//if the node is in open list with lower g (the heuristic
