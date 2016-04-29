@@ -59,10 +59,9 @@ function aStarSearch<Node> (
 	//The second node is the parent, used to reconstruct the path
 	var open:[Node, number, Node][]=[];
 	var closed:[Node, number, Node][]=[];
-	open.push([start,0, undefined]);        
-	while (open.length>0 && timeout>0){
-                
-                timeout--;
+	open.push([start,0, undefined]);  
+        var begin = Date.now();
+	while (open.length>0 && (Date.now()-begin)<=timeout*1000){
 		//find the node with the least f (g+heuristic) on open list
 		var index:number=0;
 		var minf:number = open[index][1]+heuristics(open[index][0]);
