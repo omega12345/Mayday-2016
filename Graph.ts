@@ -66,14 +66,11 @@ function aStarSearch<Node> (
 		var index:number=0;
 		var minf:number = open[index][1]+heuristics(open[index][0]);
 		for (var i = 0; i<open.length;i++){
-                    //console.log("this is list element " + i + ": " + open[i]);
 			if(minf>=open[i][1]+heuristics(open[i][0])){
-                                //console.log("The above is the element that was chosen.");
 				index=i;
 				minf=open[index][1]+heuristics(open[index][0]);
 			}
 		}
-                //console.log("Element chosen.");
 		var q:[Node, number, Node] = open.splice(index, 1)[0];
 		var edges:Edge<Node>[]= graph.outgoingEdges(q[0]);
 		loop: for (var i=0; i<edges.length; i++){
