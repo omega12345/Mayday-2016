@@ -55,6 +55,7 @@ function aStarSearch<Node> (
     heuristics : (n:Node) => number,
     timeout : number
 ) : SearchResult<Node> {
+        console.log("Beginning search");
 	//the number represents g, the cost to get from start to this node
 	//The second node is the parent, used to reconstruct the path
 	var open:[Node, number, Node][]=[];

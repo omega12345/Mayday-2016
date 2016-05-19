@@ -105,7 +105,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
      * @returns A list of list of Literal, representing a formula in disjunctive normal form (disjunction of conjunctions). See the dummy interpetation returned in the code for an example, which means ontop(a,floor) AND holding(b).
      */
     function interpretCommand(cmd : Parser.Command, state : WorldState) : DNFFormula {
-         // 2 command : take and move 
+         // 3 commands : take, move, drop 
         var interpretation: DNFFormula = [];
         if (cmd.command == "take") {
             var e: Parser.Entity = cmd.entity;

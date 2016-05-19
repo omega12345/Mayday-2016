@@ -1,6 +1,6 @@
 ///<reference path="World.ts"/>
 ///<reference path="Interpreter.ts"/>
-
+///<reference path="Graph.ts"/>
 /** 
 * Planner module
 *
@@ -76,13 +76,37 @@ module Planner {
      */
     function planInterpretation(interpretation : Interpreter.DNFFormula, state : WorldState) : string[] {
         // This function returns a dummy plan involving a random stack
-        do {
+        var plan : string[] = [];
+        //A DNFFormula is a list of lists.
+        //A goal state must satisfy all requirements of at least one of these lists.
+        var isGoal = (n:WorldState)=>
+            {for (var i = 0; i<interpretation.length;i++){
+                var adheres:boolean = true;
+                for (var j = 0; j<interpretation[i].length;j++){
+                    //TODO
+                    //set adheres to false if state does not fulfil requirements
+                }
+                if (adheres) return adheres;
+            };
+            return false;}
+        console.log("About to begin search");
+        var searchResult : SearchResult<WorldState> 
+            = aStarSearch<WorldState>(new myGraph,
+                                      state,
+                                      isGoal,
+                                      //TODO invent heuristic
+                                      (n:WorldState)=>0,
+                                      10); 
+        //now take the search result and turn it into a set of moves
+        
+        /*do {
             var pickstack = Math.floor(Math.random() * state.stacks.length);
         } while (state.stacks[pickstack].length == 0);
-        var plan : string[] = [];
-
+        
+        //plan.push("r");
         // First move the arm to the leftmost nonempty stack
         if (pickstack < state.arm) {
+            
             plan.push("Moving left");
             for (var i = state.arm; i > pickstack; i--) {
                 plan.push("l");
@@ -116,8 +140,65 @@ module Planner {
         // Finally put it down again
         plan.push("Dropping the " + state.objects[obj].form,
                   "d");
-
+                  */
         return plan;
+    }
+    
+    class myGraph implements Graph<WorldState>{
+        outgoingEdges(node:WorldState): AnnotatedEdge[]{
+            var result: AnnotatedEdge[]=[];
+            //there can be at most four edges; one for each action l, r, p, d.
+            //for each action, calculate whether the action is permissible;
+            //if so, add edge.
+            //if we are not at the leftmost point, we can move left
+            if (node.arm){
+                var nextNode: WorldState = copyWorld(node);
+                nextNode.arm-=1;
+                result.push({action:"l", from:node, to:nextNode, cost:1});
+            }
+            //if we are not at the rightmost point, we can move right
+            if (node.arm<node.stacks.length-1){
+                var nextNode: WorldState = copyWorld(node);
+                nextNode.arm+=1;
+                result.push({action:"r", from:node, to:nextNode, cost:1});
+            }
+            //now if we can drop something we plainly can't pick up anything and vice versa
+            if (node.holding!=null){
+                var nextNode: WorldState = copyWorld(node);
+                nextNode.stacks[nextNode.arm].push(nextNode.holding);
+                nextNode.holding=null;
+                result.push({action:"d", from:node, to:nextNode, cost:1});
+            }
+            else if (node.stacks[node.arm].length) {
+                var nextNode: WorldState = copyWorld(node);
+                nextNode.holding = nextNode.stacks[nextNode.arm].pop();
+                result.push({action:"p", from:node, to:nextNode, cost:1});
+            }
+            return result;
+        }
+        compareNodes : collections.ICompareFunction<WorldState>;
+    }
+    
+    class AnnotatedEdge extends Edge<WorldState>{
+        action: string;
+    }
+    //deep copy function
+    function copyWorld(world:WorldState):WorldState{
+        var s:Stack[]=[];
+        for (var i = 0; i<world.stacks.length; i++){
+            var stack:Stack=[];
+            for (var j = 0; j<world.stacks[i].length; i++){
+                stack.push(world.stacks[i][j]);
+            }
+            s.push(stack);
+        }
+        return {
+            stacks:s,
+            holding:world.holding,
+            arm:world.arm,
+            objects:world.objects,
+            examples:world.examples
+        };
     }
 
 }
