@@ -79,12 +79,27 @@ module Planner {
         var plan : string[] = [];
         //A DNFFormula is a list of lists.
         //A goal state must satisfy all requirements of at least one of these lists.
+        //alert (state.stacks);
         var isGoal = (n:WorldState)=>
             {for (var i = 0; i<interpretation.length;i++){
                 var adheres:boolean = true;
                 for (var j = 0; j<interpretation[i].length;j++){
                     //TODO
-                    //set adheres to false if state does not fulfil requirements
+                    //set adheres to false if state does not fulfill requirements
+                    var int : Interpreter.Literal = interpretation[i][j];
+                    switch (int.relation){
+                        case "holding": if ((n.holding!==int.args[0] && int.polarity)||
+                                            (state.holding ==int.args[0] && !int.polarity))
+                                                adheres=false;
+                                        break;
+                        case "ontop": break;
+                        case "above":break;
+                        case "under":break;
+                        case "beside":break;
+                        case "left of": break;
+                        case "right of": break;
+                        default: throw new Error("Missed a case: " + interpretation[i][j].relation);
+                    }
                 }
                 if (adheres) return adheres;
             };
@@ -98,7 +113,16 @@ module Planner {
                                       (n:WorldState)=>0,
                                       10); 
         //now take the search result and turn it into a set of moves
-        
+        plan.push("Found the following result:" + searchResult);
+        for (var i = 0; i<searchResult.path.length-1; i++){
+            var graph: myGraph = new myGraph;
+            var edges: AnnotatedEdge[] = graph.outgoingEdges(searchResult.path[i]);
+            for (var edge = 0; edge<edges.length; edge++){
+                if (graph.compareNodes(edges[edge].to, searchResult.path[i+1])==0)
+                    plan.push(edges[edge].action);
+            }
+            //plan.push(searchResult.path[i].action);
+        }
         /*do {
             var pickstack = Math.floor(Math.random() * state.stacks.length);
         } while (state.stacks[pickstack].length == 0);
@@ -176,7 +200,18 @@ module Planner {
             }
             return result;
         }
-        compareNodes : collections.ICompareFunction<WorldState>;
+        compareNodes : collections.ICompareFunction<WorldState> = 
+            function (a: WorldState, b: WorldState): number{
+                for (var i = 0; i<a.stacks.length; i++){
+                    for (var j = 0; j<a.stacks[i].length; j++){
+                        if (a.stacks[i][j]!==b.stacks[i][j])
+                            return 1;
+                    }
+                }
+                if (a.holding!==b.holding) return 1;
+                if (a.arm!==b.arm) return 1;
+                return 0;
+            };
     }
     
     class AnnotatedEdge extends Edge<WorldState>{
@@ -187,7 +222,7 @@ module Planner {
         var s:Stack[]=[];
         for (var i = 0; i<world.stacks.length; i++){
             var stack:Stack=[];
-            for (var j = 0; j<world.stacks[i].length; i++){
+            for (var j = 0; j<world.stacks[i].length; j++){
                 stack.push(world.stacks[i][j]);
             }
             s.push(stack);

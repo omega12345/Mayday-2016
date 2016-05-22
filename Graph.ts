@@ -118,6 +118,8 @@ function aStarSearch<Node> (
 		} 
                 closed.push(q);
 	}
+    if (Date.now()-begin>=timeout*1000)
+        throw "Timed out.";
     throw "Open list empty but goal not reached.";
 }
 
