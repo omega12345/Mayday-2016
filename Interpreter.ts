@@ -153,9 +153,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
             interpretation.push([{polarity:true, relation:"holding", args:[]}]);
 
         if (interpretation.length == 0) {
-            interpretation = null;
+            throw new Error ("No interpretations found");
         } 
-        console.log(interpretation[0]);
+        //console.log(interpretation[0]);
         return interpretation;
     }
 
@@ -234,19 +234,19 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     }
 
 
-    function isAbove(ident1 : string, ident2: string, state: WorldState): boolean {
+    export function isAbove(ident1 : string, ident2: string, state: WorldState): boolean {
         var [x1, y1] = findPosition(ident1, state);
         var [x2, y2] = findPosition(ident2, state);
         return (x1==x2 && y2 < y1);
     }
 
-    function isBeside(ident1: string, ident2: string, state: WorldState) : boolean {
+    export function isBeside(ident1: string, ident2: string, state: WorldState) : boolean {
         var [y1, x1] = findPosition(ident1, state);
         var [y2, x2] = findPosition(ident2, state);
         return (x1 - x2 == 1 || x1 - x2 == -1 );
     }
 
-    function isOntop(ident1: string, ident2: string, state: WorldState): boolean {
+    export function isOntop(ident1: string, ident2: string, state: WorldState): boolean {
         var [col1, row1] = findPosition(ident1, state);
         var [col2, row2] = findPosition(ident2, state);
         if (ident2 == "floor") {

@@ -92,7 +92,9 @@ module Planner {
                                             (state.holding ==int.args[0] && !int.polarity))
                                                 adheres=false;
                                         break;
-                        case "ontop": break;
+                        case "inside": //let's pretend that this does not happen unnecessarily
+                        case "ontop":   adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
+                                        break;
                         case "above":break;
                         case "under":break;
                         case "beside":break;

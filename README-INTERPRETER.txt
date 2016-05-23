@@ -1,0 +1,1 @@
+There is one strange thing about this code which is that it requires the console.log statement immediately before the return of interpretCommand. We have not been able to figure out the cause of this.
