@@ -23,6 +23,9 @@ module Planner {
      * @returns Augments Interpreter.InterpretationResult with a plan represented by a list of strings.
      */
     export function plan(interpretations : Interpreter.InterpretationResult[], currentState : WorldState) : PlannerResult[] {
+        if (interpretations.length>1)
+            throw new Error(verbalizeDifference(interpretations) +
+                                " Please clarify your question.");
         var errors : Error[] = [];
         var plans : PlannerResult[] = [];
         interpretations.forEach((interpretation) => {
@@ -37,6 +40,7 @@ module Planner {
                 errors.push(err);
             }
         });
+
         if (plans.length) {
             return plans;
         } else {
@@ -92,21 +96,20 @@ module Planner {
                                             (state.holding ==int.args[0] && !int.polarity))
                                                 adheres=false;
                                         break;
-                        case "inside": //let's pretend that this does not happen unnecessarily
+                        case "inside": //a synonym for ontop
                         case "ontop":   adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
                                         break;
-                        case "above":break;
-                        case "under":break;
-                        case "beside":break;
-                        case "left of": break;
-                        case "right of": break;
+                        case "above":   adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
+                                        break;
+                        case "under":   adheres = Interpreter.isAbove(int.args[1], int.args[0], n);
+                                        break;
                         default: throw new Error("Missed a case: " + interpretation[i][j].relation);
                     }
                 }
                 if (adheres) return adheres;
             };
             return false;}
-        console.log("About to begin search");
+        //console.log("About to begin search");
         var searchResult : SearchResult<WorldState> 
             = aStarSearch<WorldState>(new myGraph,
                                       state,
@@ -191,9 +194,16 @@ module Planner {
             //now if we can drop something we plainly can't pick up anything and vice versa
             if (node.holding!=null){
                 var nextNode: WorldState = copyWorld(node);
-                nextNode.stacks[nextNode.arm].push(nextNode.holding);
-                nextNode.holding=null;
-                result.push({action:"d", from:node, to:nextNode, cost:1});
+                var support: string;
+                if (node.stacks[node.arm].length)
+                    support = node.stacks[node.arm][node.stacks[node.arm].length-1];
+                else
+                    support = "floor";
+                if (Interpreter.isOkSupport(node.holding, support, node)) {
+                    nextNode.stacks[nextNode.arm].push(nextNode.holding);
+                    nextNode.holding=null;
+                    result.push({action:"d", from:node, to:nextNode, cost:1});
+                }
             }
             else if (node.stacks[node.arm].length) {
                 var nextNode: WorldState = copyWorld(node);
@@ -236,6 +246,11 @@ module Planner {
             objects:world.objects,
             examples:world.examples
         };
+    }
+
+    function verbalizeDifference(input : Interpreter.InterpretationResult[]) : String {
+        
+        return "I am pre-verbal.";
     }
 
 }

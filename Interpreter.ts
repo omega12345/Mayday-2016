@@ -203,7 +203,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     }
 
     /* checks if object1 can be supported by object2 */
-    function isOkSupport(ident1 :string, ident2: string, state: WorldState): boolean {
+    //Why do you want the worldState as well?
+    //if ident2 can support ident1 then true else false
+    export function isOkSupport(ident1 :string, ident2: string, state: WorldState): boolean {
         if (ident2 == "floor") {
             return true;
         } else {
