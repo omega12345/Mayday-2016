@@ -139,60 +139,398 @@ var Interpreter;
      * @returns A list of list of Literal, representing a formula in disjunctive normal form (disjunction of conjunctions). See the dummy interpetation returned in the code for an example, which means ontop(a,floor) AND holding(b).
      */
     function interpretCommand(cmd, state) {
-        // 3 commands : take, move, drop 
         var interpretation = [];
+        // 3 commands : take, move, put 
         if (cmd.command == "take") {
             var e = cmd.entity;
-            var is1 = findIdents(e.object, state);
-            while (e.object.location != null) {
-                var is2 = findIdents(e.object.location.entity.object, state);
-                is1 = findRelatedIdents(is1, is2, e.object.location.relation, state);
-                e = e.object.location.entity;
+            var q = e.quantifier;
+            var idents = find_solution(e.object, state).filter(function (i) { return i != "floor"; });
+            console.log(idents);
+            if (q == "any" || q == "a") {
+                for (var i = 0; i < idents.length; i++) {
+                    interpretation.push([{ polarity: true, relation: "holding", args: [idents[i]] }]);
+                }
             }
-            for (var i = 0; i < is1.length; i++) {
-                interpretation.push([{ polarity: true, relation: "holding", args: [is1[i][0]] }]);
+            else if (q == "the") {
+                if (idents.length > 1) {
+                    throw new Error("clarify");
+                }
+                else if (idents.length == 0) {
+                    throw new Error("Index Out of Bounds"); // no satisfied identifier
+                }
+                else {
+                    interpretation.push([{ polarity: true, relation: "holding", args: idents }]);
+                }
+            }
+            else if (q == "all") {
+                if (idents.length > 1) {
+                    throw new Error("can not take more than one object");
+                }
+                else if (idents.length == 1) {
+                    interpretation.push([{ polarity: true, relation: "holding", args: idents }]);
+                }
             }
         }
         else if (cmd.command == "move") {
             var e1 = cmd.entity;
-            var l = cmd.location;
+            var q1 = e1.quantifier;
+            var relation = cmd.location.relation;
             var e2 = cmd.location.entity;
-            var idents1 = findIdents(e1.object, state);
-            var idents2 = findIdents(e2.object, state);
-            while (e1.object.location != null) {
-                var s = findIdents(e1.object.location.entity.object, state);
-                idents1 = findRelatedIdents(idents1, s, e1.object.location.relation, state);
-                e1 = e1.object.location.entity;
+            var q2 = e2.quantifier;
+            var idents1 = find_solution(e1.object, state).filter(function (i) { return i != "floor"; });
+            var idents2 = find_solution(e2.object, state);
+            if (q1 == "the" && idents1.length > 1) {
+                throw new Error("clarify");
             }
-            while (e2.object.location != null) {
-                var s = findIdents(e2.object.location.entity.object, state);
-                idents2 = findRelatedIdents(idents2, s, e2.object.location.relation, state);
-                e2 = e2.object.location.entity;
+            else if (q2 == "the" && idents2.length > 1) {
+                throw new Error("clarify");
             }
-            for (var i = 0; i < idents1.length; i++) {
-                for (var j = 0; j < idents2.length; j++) {
-                    if (idents1[i][0] != idents2[j][0]) {
-                        if (l.relation == "inside" || l.relation == "ontop") {
-                            if (isOkSupport(idents1[i][0], idents2[j][0], state)) {
-                                interpretation.push([{ polarity: true, relation: l.relation, args: [idents1[i][0], idents2[j][0]] }]);
+            else {
+                if (q1 == "all" && q2 == "all") {
+                    if (idents1.length == idents2.length &&
+                        idents2.every(function (elem2) { return idents1.every(function (elem1) { return isOkRelation(elem1, elem2, relation, state); }); })) {
+                        var conj = [];
+                        for (var i = 0; i < idents2.length; i++) {
+                            if (idents1.every(function (elem1) { return isOkRelation(elem1, idents2[i], relation, state); })) {
+                                for (var j = 0; j < idents1.length; j++) {
+                                    conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
+                                }
                             }
                         }
-                        else {
-                            interpretation.push([{ polarity: true, relation: l.relation, args: [idents1[i][0], idents2[j][0]] }]);
+                    }
+                    if (conj.length != 0) {
+                        interpretation.push(conj);
+                    }
+                }
+                else if (q1 == "all") {
+                    var lists = getAllLists(idents2, idents1.length);
+                    for (var j = 0; j < lists.length; j++) {
+                        var conj = [];
+                        for (var i = 0; i < idents1.length; i++) {
+                            if (isOkRelation(idents1[i], lists[j][i], relation, state)) {
+                                conj.push({ polarity: true, relation: relation, args: [idents1[i], lists[j][i]] });
+                            }
+                        }
+                        if (conj.length == idents1.length) {
+                            interpretation.push(conj);
+                        }
+                    }
+                }
+                else if (q2 == "all") {
+                    for (var i = 0; i < idents1.length; i++) {
+                        if (idents2.every(function (e) { return isOkRelation(idents1[i], e, relation, state); })) {
+                            var conj = [];
+                            for (var j = 0; j < idents2.length; j++) {
+                                conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
+                            }
+                            interpretation.push(conj);
+                        }
+                    }
+                }
+                else {
+                    for (var i = 0; i < idents1.length; i++) {
+                        for (var j = 0; j < idents2.length; j++) {
+                            if (idents1[i] != idents2[j]) {
+                                if (isOkRelation(idents1[i], idents2[j], relation, state)) {
+                                    interpretation.push([{ polarity: true, relation: relation, args: [idents1[i], idents2[j]] }]);
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-        else if (cmd.command == "drop")
-            //I hope this means "not holding anything"
-            interpretation.push([{ polarity: true, relation: "holding", args: [] }]);
-        if (interpretation.length == 0) {
-            interpretation = null;
+        else if (cmd.command == "put") {
+            if (state.holding == "") {
+                throw new Error("not holding anything");
+            }
+            else {
+                var hold_ident = state.holding;
+                var loc = cmd.location;
+                var ent = loc.entity;
+                var rel = loc.relation;
+                var idents = find_solution(ent.object, state);
+                if (idents.length == 1) {
+                    if (isOkRelation(hold_ident, idents[0], rel, state)) {
+                        interpretation.push([{ polarity: true, relation: relation, args: [hold_ident, idents[0]] }]);
+                    }
+                    else {
+                        throw new Error("can not move the holding object to the given location");
+                    }
+                }
+                else if (idents.length > 1) {
+                    throw new Error("clarify");
+                }
+                else {
+                    throw new Error("Index Out of Bounds");
+                }
+            }
         }
-        console.log(interpretation[0]);
+        if (interpretation.length == 0) {
+            throw new Error("Index Out of Bounds");
+        }
         return interpretation;
     }
+    function find_solution(obj, state) {
+        if (IsSimpleObj(obj)) {
+            return findIdents(obj, state);
+        }
+        else {
+            var _a = separate_obj(obj), obj1 = _a[0], relation = _a[1], quant = _a[2], obj2 = _a[3];
+            var idents1 = find_solution(obj1, state);
+            var idents2 = find_solution(obj2, state);
+            if (quant == "all") {
+                var satisfied_idens1 = satisfy_all(idents1, idents2, relation, state);
+                return satisfied_idens1;
+            }
+            else if (quant == "any" || quant == "a") {
+                return satisfy_any(idents1, idents2, relation, state);
+            }
+            else if (quant == "the") {
+                //treat 'the' as same as 'any' 
+                return satisfy_any(idents1, idents2, relation, state);
+            }
+            else {
+                throw new Error("unidentified quantifier");
+            }
+        }
+    }
+    function satisfy_all(is1, is2, relation, state) {
+        var ret = [];
+        for (var i = 0; i < is1.length; i++) {
+            var b = is2.every(function (elem) { return isTrueRelation(is1[i], elem, relation, state); });
+            if (b) {
+                ret.push(is1[i]);
+            }
+        }
+        return ret;
+    }
+    function satisfy_any(is1, is2, relation, state) {
+        var ret = [];
+        for (var i = 0; i < is1.length; i++) {
+            var b = is2.some(function (elem) { return isTrueRelation(is1[i], elem, relation, state); });
+            if (b) {
+                ret.push(is1[i]);
+            }
+        }
+        return ret;
+    }
+    /* checks if ident1 has a relation with ident2 */
+    function isTrueRelation(i1, i2, relation, state) {
+        if (relation == "ontop") {
+            return isOntop(i1, i2, state);
+        }
+        else if (relation == "inside") {
+            return isInside(i1, i2, state);
+        }
+        else if (relation == "beside") {
+            return (isBeside(i1, i2, state));
+        }
+        else if (relation == "above") {
+            return (isAbove(i1, i2, state));
+        }
+        else if (relation == "under") {
+            return (isUnder(i1, i2, state));
+        }
+        else if (relation == "leftof") {
+            return isLeftof(i1, i2, state);
+        }
+        else if (relation == "rightof") {
+            return isRightof(i1, i2, state);
+        }
+        else {
+            // or thow exception instead ??? 
+            return false;
+        }
+    }
+    function separate_obj(obj) {
+        var location = obj.location;
+        var ent = location.entity;
+        return [obj.object, location.relation, ent.quantifier, ent.object];
+    }
+    function IsSimpleObj(obj) {
+        if (obj.object == null) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    /* checks if object1 can be supported by object2 */
+    function isOkSupport(o1, o2) {
+        //Balls must be in boxes or on the floor, otherwise they roll away.
+        if (o1.form == "ball" && o2.form != "box" && o2.form != "floor") {
+            return false;
+        }
+        else if (o2.form == "ball") {
+            return false;
+        }
+        else if (o1.size == "large" && o2.size == "small") {
+            return false;
+        }
+        else if (o2.form == "box" && o2.size == o1.size && (o1.form == "pyramid" || o1.form == "plank" || o1.form == "box")) {
+            return false;
+        }
+        else if (o1.form == "box" && o2.size == "small" && (o2.form == "brick" || o2.form == "pyramid")) {
+            return false;
+        }
+        else if (o1.form == "box" && o1.size == "large" && o2.form == "pyramid") {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+    Interpreter.isOkSupport = isOkSupport;
+    /* checks if ident1 can have a relation with ident2
+       for instance, a ball on a box -> false realtion */
+    function isOkRelation(ident1, ident2, rel, state) {
+        // if ident1 == "floor" ???? 
+        if (ident2 == "floor" && rel == "ontop") {
+            return true;
+        }
+        else if (ident2 == "floor" && rel != "ontop") {
+            return false;
+        }
+        else {
+            var o1 = state.objects[ident1];
+            var o2 = state.objects[ident2];
+            if (rel == "inside") {
+                if (o2.form == "box") {
+                    return isOkSupport(o1, o2);
+                }
+                else {
+                    return false;
+                }
+            }
+            else if (rel == "ontop") {
+                if (o2.form == "box") {
+                    return false;
+                }
+                else {
+                    return isOkSupport(o1, o2);
+                }
+            }
+            else {
+                return true;
+            }
+        }
+    }
+    function isAbove(ident1, ident2, state) {
+        var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+        var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
+        if (col1 == col2 && row2 < row1) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    Interpreter.isAbove = isAbove;
+    function isUnder(ident1, ident2, state) {
+        var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+        var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
+        if (col1 == col2 && row1 < row2) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    Interpreter.isUnder = isUnder;
+    function isBeside(ident1, ident2, state) {
+        var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+        var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
+        if ((col1 - col2 == 1 && row1 == row2) || (col1 - col2 == -1 && row1 == row2)) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    Interpreter.isBeside = isBeside;
+    function isInside(ident1, ident2, state) {
+        if (state.objects[ident2].form == "box") {
+            var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+            var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
+            if (row1 - row2 == 1 && col1 == col2) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            return false;
+        }
+    }
+    Interpreter.isInside = isInside;
+    function isOntop(ident1, ident2, state) {
+        if (ident2 == "floor") {
+            var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+            return row1 == 0;
+        }
+        else if (state.objects[ident2].form == "box") {
+            return false;
+        }
+        else {
+            var _b = findPosition(ident1, state), col1 = _b[0], row1 = _b[1];
+            var _c = findPosition(ident2, state), col2 = _c[0], row2 = _c[1];
+            if (row1 - row2 == 1 && col1 == col2) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+    }
+    Interpreter.isOntop = isOntop;
+    function isLeftof(ident1, ident2, state) {
+        var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+        var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
+        if (col1 < col2) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    Interpreter.isLeftof = isLeftof;
+    function isRightof(ident1, ident2, state) {
+        var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
+        var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
+        if (col1 > col2) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    Interpreter.isRightof = isRightof;
+    /* find identifiers that satisfy the object description */
+    function findIdents(o, state) {
+        var objects = Array.prototype.concat.apply([], state.stacks);
+        var n = objects.length;
+        var idents = [];
+        if (o.form == "floor") {
+            idents.push("floor");
+        }
+        else {
+            for (var i = 0; i < n; i++) {
+                if (objectMatch(o, state.objects[objects[i]])) {
+                    idents.push(objects[i]);
+                }
+            }
+        }
+        return idents;
+    }
+    function objectMatch(o1, o2) {
+        var ret = ((o1.color == null || o1.color == o2.color)
+            && (o1.size == null || o1.size == o2.size)
+            && (o1.form == "anyform" || o1.form == o2.form));
+        return ret;
+    }
+    /* find an identifier position in a world, return [column, row]. */
     function findPosition(ident, state) {
         var pos = [];
         var stacks = state.stacks;
@@ -208,111 +546,42 @@ var Interpreter;
         }
         return [col, row];
     }
-    /* find identifiers that satisfy the object description */
-    function findIdents(o, state) {
-        var obj = o;
-        if (o.object != null) {
-            obj = o.object;
-        }
-        var objects = Array.prototype.concat.apply([], state.stacks);
-        var n = objects.length;
-        var idents = [];
-        if (obj.form == "floor") {
-            idents.push(["floor"]);
-        }
-        else {
-            for (var i = 0; i < n; i++) {
-                if (objectMatch(obj, state.objects[objects[i]])) {
-                    idents.push([objects[i]]);
-                }
+    /* return all possible combination of a given list.
+       for instance if input elements = ["a","b"], and leng = 2,
+       then getAllLists will return [["a","a"],["a","b"],["b","a"],["b","b"]] */
+    function getAllLists(elements, leng) {
+        var allLists = [];
+        if (leng == 1) {
+            var ret = [];
+            for (var i = 0; i < elements.length; i++) {
+                ret.push([elements[i]]);
             }
-        }
-        return idents;
-    }
-    function objectMatch(o1, o2) {
-        return ((o1.color == null || o1.color == o2.color)
-            && (o1.size == null || o1.size == o2.size)
-            && (o1.form == "anyform" || o1.form == o2.form)); // if o2.form == floor ? 
-    }
-    /* checks if object1 can be supported by object2 */
-    function isOkSupport(ident1, ident2, state) {
-        if (ident2 == "floor") {
-            return true;
+            return ret;
         }
         else {
-            var o1 = state.objects[ident1];
-            var o2 = state.objects[ident2];
-            //Balls must be in boxes or on the floor, otherwise they roll away.
-            if (o1.form == "ball" && o2.form != "box" && o2.form != "floor") {
-                return false;
-            }
-            else if (o2.form == "ball") {
-                return false;
-            }
-            else if (o1.size == "large" && o2.size == "small") {
-                return false;
-            }
-            else if (o2.form == "box" && o2.size == o1.size && (o1.form == "pyramid" || o1.form == "plank" || o1.form == "box")) {
-                return false;
-            }
-            else if (o1.form == "box" && o2.size == "small" && (o2.form == "brick" || o2.form == "pyramid")) {
-                return false;
-            }
-            else if (o1.form == "box" && o1.size == "large" && o2.form == "pyramid") {
-                return false;
-            }
-        }
-        return true;
-    }
-    function isAbove(ident1, ident2, state) {
-        var _a = findPosition(ident1, state), x1 = _a[0], y1 = _a[1];
-        var _b = findPosition(ident2, state), x2 = _b[0], y2 = _b[1];
-        return (x1 == x2 && y2 < y1);
-    }
-    function isBeside(ident1, ident2, state) {
-        var _a = findPosition(ident1, state), y1 = _a[0], x1 = _a[1];
-        var _b = findPosition(ident2, state), y2 = _b[0], x2 = _b[1];
-        return (x1 - x2 == 1 || x1 - x2 == -1);
-    }
-    function isOntop(ident1, ident2, state) {
-        var _a = findPosition(ident1, state), col1 = _a[0], row1 = _a[1];
-        var _b = findPosition(ident2, state), col2 = _b[0], row2 = _b[1];
-        if (ident2 == "floor") {
-            return row1 == 0;
-        }
-        else {
-            return (row1 - row2 == 1 && col1 == col2);
-        }
-    }
-    function findRelatedIdents(idents1, idents2, relation, state) {
-        var ret = [];
-        var leng1 = idents1.length;
-        var leng2 = idents2.length;
-        for (var i = 0; i < leng1; i++) {
-            for (var j = 0; j < leng2; j++) {
-                var l1 = idents1[i];
-                var l2 = idents2[j];
-                if (relation == "ontop" || relation == "inside") {
-                    if (isOkSupport(l1[l1.length - 1], l2[l2.length - 1], state)
-                        && isOntop(l1[l1.length - 1], l2[l2.length - 1], state)) {
-                        ret.push([l1[l1.length - 1], l2[l2.length - 1]]);
+            var allSublists = getAllLists(elements, leng - 1);
+            for (var i = 0; i < elements.length; i++) {
+                for (var j = 0; j < allSublists.length; j++) {
+                    var l = [];
+                    l.push(elements[i]);
+                    for (var s = 0; s < allSublists[j].length; s++) {
+                        l.push(allSublists[j][s]);
                     }
-                }
-                else if (relation == "beside") {
-                    if (isBeside(l1[l1.length - 1], l2[l2.length - 1], state)) {
-                        ret.push([l1[l1.length - 1], l2[l2.length - 1]]);
-                    }
-                }
-                else if (relation == "above") {
-                    if (isAbove(l1[l1.length - 1], l2[l2.length - 1], state)) {
-                        ret.push([l1[l1.length - 1], l2[l2.length - 1]]);
-                    }
+                    allLists.push(l);
                 }
             }
         }
-        return ret;
+        return allLists;
     }
 })(Interpreter || (Interpreter = {}));
+/*
+
+Thing to check:
+- put-commmand !!
+- floor handling is okey ?
+-
+
+*/
 // Copyright 2013 Basarat Ali Syed. All Rights Reserved.
 //
 // Licensed under MIT open source license http://opensource.org/licenses/MIT
@@ -2945,6 +3214,9 @@ var Planner;
      * @returns Augments Interpreter.InterpretationResult with a plan represented by a list of strings.
      */
     function plan(interpretations, currentState) {
+        if (interpretations.length > 1)
+            throw new Error(verbalizeDifference(interpretations) +
+                " Please clarify your question.");
         var errors = [];
         var plans = [];
         interpretations.forEach(function (interpretation) {
@@ -2998,7 +3270,7 @@ var Planner;
         var plan = [];
         //A DNFFormula is a list of lists.
         //A goal state must satisfy all requirements of at least one of these lists.
-        alert(state);
+        //alert (state.stacks);
         var isGoal = function (n) {
             for (var i = 0; i < interpretation.length; i++) {
                 var adheres = true;
@@ -3008,16 +3280,20 @@ var Planner;
                     var int = interpretation[i][j];
                     switch (int.relation) {
                         case "holding":
-                            if ((state.holding == "a"))
-                                //(state.holding ==int.args[0] && !int.polarity))
+                            if ((n.holding !== int.args[0] && int.polarity) ||
+                                (state.holding == int.args[0] && !int.polarity))
                                 adheres = false;
                             break;
-                        case "on top of": break;
-                        case "above": break;
-                        case "under": break;
-                        case "beside": break;
-                        case "left of": break;
-                        case "right of": break;
+                        case "inside": //a synonym for ontop
+                        case "ontop":
+                            adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
+                            break;
+                        case "above":
+                            adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
+                            break;
+                        case "under":
+                            adheres = Interpreter.isAbove(int.args[1], int.args[0], n);
+                            break;
                         default: throw new Error("Missed a case: " + interpretation[i][j].relation);
                     }
                 }
@@ -3027,11 +3303,20 @@ var Planner;
             ;
             return false;
         };
-        console.log("About to begin search");
+        //console.log("About to begin search");
         var searchResult = aStarSearch(new myGraph, state, isGoal, 
         //TODO invent heuristic
         function (n) { return 0; }, 10);
         //now take the search result and turn it into a set of moves
+        plan.push("Found the following result:" + searchResult);
+        for (var i = 0; i < searchResult.path.length - 1; i++) {
+            var graph = new myGraph;
+            var edges = graph.outgoingEdges(searchResult.path[i]);
+            for (var edge = 0; edge < edges.length; edge++) {
+                if (graph.compareNodes(edges[edge].to, searchResult.path[i + 1]) == 0)
+                    plan.push(edges[edge].action);
+            }
+        }
         /*do {
             var pickstack = Math.floor(Math.random() * state.stacks.length);
         } while (state.stacks[pickstack].length == 0);
@@ -3112,9 +3397,16 @@ var Planner;
             //now if we can drop something we plainly can't pick up anything and vice versa
             if (node.holding != null) {
                 var nextNode = copyWorld(node);
-                nextNode.stacks[nextNode.arm].push(nextNode.holding);
-                nextNode.holding = null;
-                result.push({ action: "d", from: node, to: nextNode, cost: 1 });
+                var support;
+                if (node.stacks[node.arm].length)
+                    support = node.stacks[node.arm][node.stacks[node.arm].length - 1];
+                else
+                    support = "floor";
+                if (support == "floor" || Interpreter.isOkSupport(node.objects[node.holding], node.objects[support])) {
+                    nextNode.stacks[nextNode.arm].push(nextNode.holding);
+                    nextNode.holding = null;
+                    result.push({ action: "d", from: node, to: nextNode, cost: 1 });
+                }
             }
             else if (node.stacks[node.arm].length) {
                 var nextNode = copyWorld(node);
@@ -3149,6 +3441,9 @@ var Planner;
             objects: world.objects,
             examples: world.examples
         };
+    }
+    function verbalizeDifference(input) {
+        return "I am pre-verbal.";
     }
 })(Planner || (Planner = {}));
 ///<reference path="World.ts"/>

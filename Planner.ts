@@ -96,7 +96,8 @@ module Planner {
                                             (state.holding ==int.args[0] && !int.polarity))
                                                 adheres=false;
                                         break;
-                        case "inside": //a synonym for ontop
+                        case "inside":  adheres = Interpreter.isInside(int.args[0], int.args[1], n);
+                                        break; //a synonym for ontop
                         case "ontop":   adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
                                         break;
                         case "above":   adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
@@ -199,7 +200,7 @@ module Planner {
                     support = node.stacks[node.arm][node.stacks[node.arm].length-1];
                 else
                     support = "floor";
-                if (Interpreter.isOkSupport(node.holding, support, node)) {
+                if (support == "floor" || Interpreter.isOkSupport(node.objects[node.holding], node.objects[support])) {
                     nextNode.stacks[nextNode.arm].push(nextNode.holding);
                     nextNode.holding=null;
                     result.push({action:"d", from:node, to:nextNode, cost:1});

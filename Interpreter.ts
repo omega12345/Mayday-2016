@@ -105,114 +105,209 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
      * @returns A list of list of Literal, representing a formula in disjunctive normal form (disjunction of conjunctions). See the dummy interpetation returned in the code for an example, which means ontop(a,floor) AND holding(b).
      */
     function interpretCommand(cmd : Parser.Command, state : WorldState) : DNFFormula {
-         // 3 commands : take, move, drop 
         var interpretation: DNFFormula = [];
+        // 3 commands : take, move, put 
         if (cmd.command == "take") {
             var e: Parser.Entity = cmd.entity;
-            var is1: string[][] = findIdents(e.object, state);
-            while (e.object.location != null) {
-                var is2: string[][] = findIdents(e.object.location.entity.object, state);
-                is1 = findRelatedIdents(is1, is2, e.object.location.relation, state);
-                e = e.object.location.entity;
+            var q: string = e.quantifier;
+            var idents: string[] = find_solution(e.object, state).filter(i => i != "floor");
+            console.log(idents);
+            if (q == "any" || q == "a") {
+				for (var i = 0; i < idents.length; i++) {
+					interpretation.push([{ polarity: true, relation: "holding", args: [idents[i]] }]);
+				}
+            } else if (q == "the" ) {
+				if (idents.length > 1) {
+					throw new Error("clarify");
+				} else if (idents.length == 0) {
+					throw new Error("Index Out of Bounds"); // no satisfied identifier
+				} else { 
+					interpretation.push([{ polarity: true, relation: "holding", args: idents }]);
+				}
+            } else if (q == "all") {
+				if (idents.length > 1) {
+					throw new Error("can not take more than one object");
+				} else if (idents.length == 1){
+					interpretation.push([{ polarity: true, relation: "holding", args: idents }]);	
+				} 
             }
-            for (var i = 0; i < is1.length; i++) {
-                interpretation.push([{ polarity: true, relation: "holding", args: [is1[i][0]] }]);
-            }
+
         } else if (cmd.command == "move") {
             var e1: Parser.Entity = cmd.entity;
-            var l: Parser.Location = cmd.location; 
-            var e2: Parser.Entity = cmd.location.entity;
-            var idents1: string[][] = findIdents(e1.object, state);
-            var idents2: string[][] = findIdents(e2.object, state);
-            while (e1.object.location != null) {
-                var s: string[][] = findIdents(e1.object.location.entity.object, state);
-                idents1 = findRelatedIdents(idents1, s, e1.object.location.relation, state);
-                e1 = e1.object.location.entity;
-            }            
-            while (e2.object.location != null) {
-                var s: string[][] = findIdents(e2.object.location.entity.object, state);
-                idents2  = findRelatedIdents(idents2, s, e2.object.location.relation, state);
-                e2 = e2.object.location.entity;
+            var q1: string = e1.quantifier;
+			var relation: string = cmd.location.relation;
+            var e2: Parser.Entity = cmd.location.entity; 
+            var q2: string = e2.quantifier;
+            var idents1: string[] = find_solution(e1.object, state).filter(i => i != "floor");
+            var idents2: string[] = find_solution(e2.object, state);
+            if (q1 == "the" && idents1.length > 1) {
+				throw new Error("clarify");
+            } else if (q2 == "the" && idents2.length > 1) {
+				throw new Error("clarify");
+            } else { // no difference between 'the' and 'any'
+				if (q1 == "all" && q2 == "all") { // 'all' to 'all'
+					if(idents1.length == idents2.length && 
+					   idents2.every(elem2 => idents1.every(elem1 => isOkRelation(elem1,elem2,relation,state)))) {
+						var conj: Conjunction = [];
+						for (var i = 0; i < idents2.length; i++) {
+							if (idents1.every(elem1 => isOkRelation(elem1, idents2[i], relation, state))) {
+								for (var j = 0; j < idents1.length; j++) {
+									conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
+								}
+							}
+						}
+					}
+					if (conj.length != 0) {
+						interpretation.push(conj);
+					}
+				} else if (q1 == "all" ) { // 'all' to 'any'
+					var lists: string[][] = getAllLists(idents2, idents1.length);
+					for (var j = 0; j < lists.length; j++) {
+						var conj: Conjunction = [];
+						for (var i = 0; i < idents1.length; i++) {
+							if (isOkRelation(idents1[i], lists[j][i], relation, state)) {
+								conj.push({ polarity: true, relation: relation, args: [idents1[i], lists[j][i]] });
+							}
+						}
+						if (conj.length == idents1.length) {
+							interpretation.push(conj);
+						}
+					}
+				} else if (q2 == "all") { // 'any' to 'all'
+					for (var i = 0; i < idents1.length; i++) {
+						if (idents2.every(e => isOkRelation(idents1[i],e,relation,state))) {
+							var conj: Conjunction = [];
+							for (var j = 0; j < idents2.length; j++) {
+								conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
+							}
+							interpretation.push(conj);
+						}
+					}
+				} else { // 'any' to 'any' 
+					for (var i = 0; i < idents1.length; i++) {
+						for (var j = 0; j < idents2.length; j++) {
+							if (idents1[i] != idents2[j]) {
+								if (isOkRelation(idents1[i], idents2[j], relation, state)) {								
+									interpretation.push([{ polarity: true, relation: relation, args: [idents1[i], idents2[j]] }]);
+								}
+							}
+						}
+					} 
+				}
             }
-            for (var i = 0; i < idents1.length; i++) {
-                for (var j = 0; j < idents2.length; j++) {
-                    if (idents1[i][0] != idents2[j][0]) {
-                        if (l.relation == "inside" || l.relation == "ontop") {
-                            if (isOkSupport(idents1[i][0], idents2[j][0], state)) {
-                                interpretation.push([{ polarity: true, relation: l.relation, args: [idents1[i][0], idents2[j][0]] }]);
-                            }
-                        } else {
-                            interpretation.push([{ polarity: true, relation: l.relation, args: [idents1[i][0], idents2[j][0]] }]);
-                        }
-                    }
-                }
-            } 
-        } 
-        else if (cmd.command=="drop")
-            //I hope this means "not holding anything"
-            interpretation.push([{polarity:true, relation:"holding", args:[]}]);
-
+        }
+        else if (cmd.command == "put") {
+			if (state.holding == "") { //not holding anything. 
+				throw new Error("not holding anything");
+			} else {
+				var hold_ident: string = state.holding;
+				var loc: Parser.Location = cmd.location;
+				var ent: Parser.Entity = loc.entity;
+				var rel: string = loc.relation;
+				var idents: string[] = find_solution(ent.object, state);
+				if (idents.length == 1) {
+					if (isOkRelation(hold_ident, idents[0], rel, state)) {
+						interpretation.push([{ polarity: true, relation: relation, args: [hold_ident, idents[0]] }]);
+					} else {
+						throw new Error("can not move the holding object to the given location");
+					}
+				} else if (idents.length > 1) { 
+					throw new Error("clarify");
+				} else {
+					throw new Error("Index Out of Bounds");
+				}
+			}
+        }
         if (interpretation.length == 0) {
-            throw new Error ("No interpretations found");
-        } 
-        //console.log(interpretation[0]);
+            throw new Error("Index Out of Bounds");
+        }
         return interpretation;
     }
 
-    function findPosition (ident: string, state: WorldState): number[]{
-        var pos: number[] = []
-        var stacks: Stack[] = state.stacks;
-        var col: number = 0;
-        var row: number = 0;
-        for (var i = 0; i < stacks.length; i++) {
-            for (var j = 0; j < stacks[i].length; j++) {
-                if (stacks[i][j]== ident) {
-                    col = i;
-                    row = j;
-                }
+    function find_solution(obj: Parser.Object, state: WorldState): string[]{
+        if (IsSimpleObj(obj)) {
+            return findIdents(obj, state);
+          // if an object is not simple, then the object can always separate into 
+          // two smaller objects, one quantifier and one relation .
+        } else { 
+            var [obj1,relation,quant,obj2] = separate_obj(obj);
+            var idents1 = find_solution(obj1, state);
+            var idents2 = find_solution(obj2, state);
+            if (quant == "all") {
+                var satisfied_idens1: string[] = satisfy_all(idents1, idents2, relation, state);
+                return satisfied_idens1;
+            } else if (quant == "any" || quant == "a") {
+                return satisfy_any(idents1, idents2, relation, state);
+            } else if (quant == "the") {
+                //treat 'the' as same as 'any' 
+                return satisfy_any(idents1, idents2, relation, state);
+            } else {
+				throw new Error("unidentified quantifier");
             }
         }
-       return [col,row]; 
     }
 
-    /* find identifiers that satisfy the object description */
-    function findIdents(o: Parser.Object, state: WorldState): string[][] {
-        var obj: Parser.Object = o;
-        if (o.object != null) {
-            obj = o.object;
+    function satisfy_all(is1: string[], is2: string[], relation: string, state: WorldState): string[]{
+        var ret: string[] = []; 
+        for (var i = 0; i < is1.length; i++){
+            var b: boolean = is2.every(elem => isTrueRelation(is1[i], elem, relation, state));
+            if (b) {
+                ret.push(is1[i]);
+            }
         }
-        var objects: string[] = Array.prototype.concat.apply([], state.stacks);
-        var n: number = objects.length;
-        var idents: string[][] = [];
-        if (obj.form == "floor") {
-            idents.push(["floor"]);
+        return ret; 
+    } 
+    function satisfy_any(is1: string[], is2: string[], relation: string, state: WorldState): string[] {
+        var ret: string[] = [];
+        for (var i = 0; i < is1.length; i++) {
+            var b: boolean = is2.some(elem => isTrueRelation(is1[i], elem, relation, state));
+            if (b) {
+                ret.push(is1[i]);
+            }
+        }
+        return ret;
+    } 
+
+    /* checks if ident1 has a relation with ident2 */
+    function isTrueRelation(i1: string, i2: string, relation: string, state: WorldState) {    	
+        if (relation == "ontop") {
+            return isOntop(i1, i2, state);
+        } else if (relation == "inside") {
+            return isInside(i1, i2, state);
+        } else if (relation == "beside") {
+            return (isBeside(i1, i2, state))
+        } else if (relation == "above") {
+            return (isAbove(i1, i2, state))
+        } else if (relation == "under") {
+            return (isUnder(i1, i2, state));
+        } else if (relation == "leftof") {
+            return isLeftof(i1, i2, state);
+        } else if (relation == "rightof") {
+            return isRightof(i1, i2, state);
         } else {
-            for (var i = 0; i < n; i++) {
-                if (objectMatch(obj, state.objects[objects[i]])) {
-                    idents.push([objects[i]]);
-                }
-            }      
+            // or thow exception instead ??? 
+            return false;
         }
-        return idents;
     }
  
-    function objectMatch(o1: Parser.Object, o2: Parser.Object): boolean {
-        return ((o1.color == null || o1.color == o2.color)
-            && (o1.size == null || o1.size == o2.size)
-            && (o1.form == "anyform" || o1.form == o2.form));// if o2.form == floor ? 
+    function separate_obj(obj: Parser.Object): [Parser.Object, string, string, Parser.Object] {
+        var location = obj.location;
+        var ent = location.entity;
+        return [obj.object, location.relation, ent.quantifier, ent.object];
     }
 
-    /* checks if object1 can be supported by object2 */
-    //Why do you want the worldState as well?
-    //if ident2 can support ident1 then true else false
-    export function isOkSupport(ident1 :string, ident2: string, state: WorldState): boolean {
-        if (ident2 == "floor") {
+    function IsSimpleObj(obj: Parser.Object): Boolean {
+        if (obj.object == null) {
             return true;
         } else {
-            var o1: Parser.Object = state.objects[ident1];
-            var o2: Parser.Object = state.objects[ident2];
+            return false;
+        }
+    }
+
+    /* checks if object1 can be supported by object2 */  
+    export function isOkSupport(o1: Parser.Object, o2: Parser.Object): boolean {
             //Balls must be in boxes or on the floor, otherwise they roll away.
-            if (o1.form == "ball" && o2.form != "box" && o2.form != "floor") { // floor ??
+            if (o1.form == "ball" && o2.form != "box" && o2.form != "floor") {
                 return false;
             } else if (o2.form == "ball") { //Balls cannot support anything.
                 return false;
@@ -220,7 +315,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
             } else if (o1.size == "large" && o2.size == "small") {
                 return false;
                 //Boxes cannot contain pyramids, planks or boxes of the same size.  
-            } else if (o2.form == "box" && o2.size == o1.size && (o1.form == "pyramid" || o1.form == "plank" ||  o1.form == "box")) {
+            } else if (o2.form == "box" && o2.size == o1.size && (o1.form == "pyramid" || o1.form == "plank" || o1.form == "box")) {
                 return false;
                 //Small boxes cannot be supported by small bricks or pyramids.
                 //I.e. no boxes can be supported by small bricks or pyramids.
@@ -230,24 +325,83 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
                 //Small pyramids can't support large anything
             } else if (o1.form == "box" && o1.size == "large" && o2.form == "pyramid") {
                 return false;
+            } else {
+				return true;
             }
+    }
+
+    /* checks if ident1 can have a relation with ident2 
+       for instance, a ball on a box -> false realtion */
+    function isOkRelation(ident1: string, ident2: string, rel: string, state: WorldState): boolean {
+        // if ident1 == "floor" ???? 
+        if (ident2 == "floor" && rel == "ontop") {
+			return true;
+        } else if (ident2 == "floor" && rel != "ontop") {
+			return false;
+        } else {
+			var o1: Parser.Object = state.objects[ident1];
+			var o2: Parser.Object = state.objects[ident2];
+			if (rel == "inside") {
+				if (o2.form == "box") {
+					return isOkSupport(o1, o2);
+				} else {
+					return false;
+				}
+			} else if (rel == "ontop") {
+				if (o2.form == "box") {
+					return false;
+				} else {
+					return isOkSupport(o1, o2);
+				}
+
+			} else {
+				return true;
+			}
         }
-        return true; 
     }
 
 
-    export function isAbove(ident1 : string, ident2: string, state: WorldState): boolean {
-        var [x1, y1] = findPosition(ident1, state);
-        var [x2, y2] = findPosition(ident2, state);
-        return (x1==x2 && y2 < y1);
+    export function isAbove(ident1: string, ident2: string, state: WorldState): boolean {
+        var [col1, row1] = findPosition(ident1, state);
+        var [col2, row2] = findPosition(ident2, state);
+        if (col1 == col2 && row2 < row1) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    export function isUnder(ident1: string, ident2: string, state: WorldState): boolean {
+        var [col1, row1] = findPosition(ident1, state);
+        var [col2, row2] = findPosition(ident2, state);
+        if (col1 == col2 && row1 < row2) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    export function isBeside(ident1: string, ident2: string, state: WorldState): boolean {
+        var [col1, row1] = findPosition(ident1, state);
+        var [col2, row2] = findPosition(ident2, state);
+        if ((col1 - col2 == 1 && row1 == row2) || (col1 - col2 == -1 && row1 == row2)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    export function isBeside(ident1: string, ident2: string, state: WorldState) : boolean {
-        var [y1, x1] = findPosition(ident1, state);
-        var [y2, x2] = findPosition(ident2, state);
-        return (x1 - x2 == 1 || x1 - x2 == -1 );
+    export function isInside(ident1: string, ident2: string, state: WorldState): boolean {
+        if (state.objects[ident2].form == "box") { //Objects are “inside” boxes
+            var [col1, row1] = findPosition(ident1, state);
+            var [col2, row2] = findPosition(ident2, state);
+            if (row1 - row2 == 1 && col1 == col2) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
     }
-
     export function isOntop(ident1: string, ident2: string, state: WorldState): boolean {
         var [col1, row1] = findPosition(ident1, state);
         var [col2, row2] = findPosition(ident2, state);
@@ -257,32 +411,103 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
             return (row1 - row2 == 1 && col1 == col2);
         }
     }
+    export function isLeftof(ident1: string, ident2: string, state: WorldState): boolean {
+        var [col1, row1] = findPosition(ident1, state);
+        var [col2, row2] = findPosition(ident2, state);
+        if (col1 < col2) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    export function isRightof(ident1: string, ident2: string, state: WorldState): boolean {
+        var [col1, row1] = findPosition(ident1, state);
+        var [col2, row2] = findPosition(ident2, state);
+        if (col1 > col2) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-    function findRelatedIdents(idents1: string[][], idents2: string[][], relation: string, state: WorldState): string[][]{
-        var ret: string[][] = [];
-        var leng1: number = idents1.length;
-        var leng2: number = idents2.length; 
-        for (var i = 0; i < leng1; i++) {
-            for (var j =0; j < leng2; j++) {
-                var l1 = idents1[i];
-                var l2 = idents2[j];
-                if (relation == "ontop" || relation == "inside") {
-                    if (isOkSupport(l1[l1.length-1], l2[l2.length-1], state) 
-                        && isOntop(l1[l1.length - 1], l2[l2.length - 1], state)) {
-                        ret.push([l1[l1.length-1], l2[l2.length-1]]);
-                    } 
-                } else if (relation == "beside") {
-                    if (isBeside(l1[l1.length-1], l2[l2.length-1], state)) {
-                        ret.push([l1[l1.length-1], l2[l2.length-1]]);
-                    }
-                } else if (relation == "above") {
-                    if (isAbove(l1[l1.length-1], l2[l2.length-1], state)) {
-                        ret.push([l1[l1.length-1], l2[l2.length-1]]);
-                    }
+
+    /* find identifiers that satisfy the object description */
+    function findIdents(o: Parser.Object, state: WorldState): string[] {
+        var objects: string[] = Array.prototype.concat.apply([], state.stacks);
+        var n: number = objects.length;
+        var idents: string[] = [];
+        if (o.form == "floor") {
+            idents.push("floor");
+        } else {
+            for (var i = 0; i < n; i++) {
+                if (objectMatch(o, state.objects[objects[i]])) {
+                    idents.push(objects[i]);
                 }
             }
         }
+        return idents;
+    }
+
+    function objectMatch(o1: Parser.Object, o2: Parser.Object): boolean {
+        var ret = ((o1.color == null || o1.color == o2.color)
+            && (o1.size == null || o1.size == o2.size)
+            && (o1.form == "anyform" || o1.form == o2.form));
         return ret;
     }
+
+    /* find an identifier position in a world, return [column, row]. */
+    function findPosition(ident: string, state: WorldState): number[] {
+        var pos: number[] = []
+        var stacks: Stack[] = state.stacks;
+        var col: number = 0;
+        var row: number = 0;
+        for (var i = 0; i < stacks.length; i++) {
+            for (var j = 0; j < stacks[i].length; j++) {
+                if (stacks[i][j] == ident) {
+                    col = i;
+                    row = j;
+                }
+            }
+        }
+        return [col, row];
+    }
+    /* return all possible combination of a given list. 
+       for instance if input elements = ["a","b"], and leng = 2, 
+       then getAllLists will return [["a","a"],["a","b"],["b","a"],["b","b"]] */
+	function getAllLists(elements: string[], leng: number): string[][] {
+		var allLists: string[][] = [];
+		if (leng == 1) {
+			var ret: string[][] = [];
+			for (var i = 0; i < elements.length; i++) {
+				ret.push([elements[i]]);
+			}
+			return ret;
+		} else {
+			var allSublists: string[][] = getAllLists(elements, leng - 1);
+			for (var i = 0; i < elements.length; i++) {
+				for (var j = 0; j < allSublists.length; j++) {
+					var l: string[] = [];
+					l.push(elements[i]);
+					for (var s = 0; s < allSublists[j].length; s++) {
+						l.push(allSublists[j][s]);
+					}
+					allLists.push(l);
+				}
+			}
+		}
+		return allLists;
+    }
+
 }
+/*
+
+Thing to check:
+- put-commmand !!
+- floor handling is okey ?
+- 
+
+*/
+
+
+
 
