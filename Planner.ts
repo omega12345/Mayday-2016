@@ -88,35 +88,35 @@ module Planner {
             {for (var i = 0; i<interpretation.length;i++){
                 var adheres:boolean = true;
                 for (var j = 0; j<interpretation[i].length;j++){
-                    //TODO
-                    //set adheres to false if state does not fulfill requirements
                     var int : Interpreter.Literal = interpretation[i][j];
-                    switch (int.relation){
-                        case "holding": if ((n.holding!==int.args[0] && int.polarity)||
-                                            (state.holding ==int.args[0] && !int.polarity))
-                                                adheres=false;
-                                        break;
-                        case "inside":  adheres = Interpreter.isInside(int.args[0], int.args[1], n);
-                                        break; //a synonym for ontop
-                        case "ontop":   adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
-                                        break;
-                        case "above":   adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
-                                        break;
-                        case "under":   adheres = Interpreter.isAbove(int.args[1], int.args[0], n);
-                                        break;
-                        default: throw new Error("Missed a case: " + interpretation[i][j].relation);
-                    }
+                    adheres = literalIsTheCase(n, int);
                 }
                 if (adheres) return adheres;
             };
             return false;}
+        var heuristic = (n:WorldState)=>
+            {   if (!interpretation.length) return 0;
+                var minToDo = 0;
+                for (var j = 0; j<interpretation[0].length;j++){
+                    var int : Interpreter.Literal = interpretation[0][j];
+                    if (!literalIsTheCase(n, int)) minToDo++;
+                }
+                
+                for (var i = 0; i<interpretation.length;i++){
+                var toDoHere = 0;
+                for (var j = 0; j<interpretation[i].length;j++){
+                    var int : Interpreter.Literal = interpretation[i][j];
+                    if (!literalIsTheCase(n, int)) toDoHere++;
+                }
+                minToDo = Math.min (minToDo, toDoHere);
+            };
+            return minToDo;}
         //console.log("About to begin search");
         var searchResult : SearchResult<WorldState> 
             = aStarSearch<WorldState>(new myGraph,
                                       state,
                                       isGoal,
-                                      //TODO invent heuristic
-                                      (n:WorldState)=>0,
+                                      heuristic,
                                       10); 
         //now take the search result and turn it into a set of moves
         plan.push("Found the following result:" + searchResult);
@@ -172,6 +172,27 @@ module Planner {
                   "d");
                   */
         return plan;
+    }
+
+    function literalIsTheCase (n:WorldState, int : Interpreter.Literal):boolean{
+        var adheres = true;
+        switch (int.relation){
+                        case "holding": if ((n.holding!==int.args[0] && int.polarity)||
+                                            (n.holding ==int.args[0] && !int.polarity))
+                                                adheres=false;
+                                        break;
+                        case "inside":  adheres = Interpreter.isInside(int.args[0], int.args[1], n);
+                                        break; //a synonym for ontop
+                        case "ontop":   adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
+                                        break;
+                        case "above":   adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
+                                        break;
+                        case "under":   adheres = Interpreter.isAbove(int.args[1], int.args[0], n);
+                                        break;
+                        case "beside":  throw "TODO";
+                        default: throw new Error("Missed a case: " + int.relation);
+                    }
+        return adheres;
     }
     
     class myGraph implements Graph<WorldState>{
