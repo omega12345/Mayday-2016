@@ -106,6 +106,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
      */
     function interpretCommand(cmd : Parser.Command, state : WorldState) : DNFFormula {
         var interpretation: DNFFormula = [];
+        
         // 3 commands : take, move, put 
         if (cmd.command == "take") {
             var e: Parser.Entity = cmd.entity;
@@ -120,7 +121,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 				if (idents.length > 1) {
 					throw new Error("clarify");
 				} else if (idents.length == 0) {
-					throw new Error("Index Out of Bounds"); // no satisfied identifier
+					throw new Error("No such object."); // no satisfied identifier
 				} else { 
 					interpretation.push([{ polarity: true, relation: "holding", args: idents }]);
 				}
@@ -140,12 +141,15 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
             var q2: string = e2.quantifier;
             var idents1: string[] = find_solution(e1.object, state).filter(i => i != "floor");
             var idents2: string[] = find_solution(e2.object, state);
+            
             if (q1 == "the" && idents1.length > 1) {
 				throw new Error("clarify");
             } else if (q2 == "the" && idents2.length > 1) {
 				throw new Error("clarify");
             } else { // no difference between 'the' and 'any'
+                                
 				if (q1 == "all" && q2 == "all") { // 'all' to 'all'
+                                
 					if(idents1.length == idents2.length && 
 					   idents2.every(elem2 => idents1.every(elem1 => isOkRelation(elem1,elem2,relation,state)))) {
 						var conj: Conjunction = [];
@@ -161,6 +165,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 						interpretation.push(conj);
 					}
 				} else if (q1 == "all" ) { // 'all' to 'any'
+                                    
 					var lists: string[][] = getAllLists(idents2, idents1.length);
 					for (var j = 0; j < lists.length; j++) {
 						var conj: Conjunction = [];
@@ -185,15 +190,19 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 					}
 				} else { // 'any' to 'any' 
 					for (var i = 0; i < idents1.length; i++) {
+                                                
 						for (var j = 0; j < idents2.length; j++) {
+                                                
 							if (idents1[i] != idents2[j]) {
 								if (isOkRelation(idents1[i], idents2[j], relation, state)) {								
 									interpretation.push([{ polarity: true, relation: relation, args: [idents1[i], idents2[j]] }]);
 								}
 							}
 						}
+                                                
 					} 
 				}
+                                    
             }
         }
         else if (cmd.command == "put") {
@@ -214,12 +223,12 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 				} else if (idents.length > 1) { 
 					throw new Error("clarify");
 				} else {
-					throw new Error("Index Out of Bounds");
+					throw new Error("Did not understand command");
 				}
 			}
         }
         if (interpretation.length == 0) {
-            throw new Error("Index Out of Bounds");
+            throw new Error("Failed to find an interpretation.");
         }
         return interpretation;
     }
@@ -403,12 +412,19 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         }
     }
     export function isOntop(ident1: string, ident2: string, state: WorldState): boolean {
-        var [col1, row1] = findPosition(ident1, state);
-        var [col2, row2] = findPosition(ident2, state);
         if (ident2 == "floor") {
+            var [col1, row1] = findPosition(ident1, state);
             return row1 == 0;
+        } else if (state.objects[ident2].form == "box") {
+            return false;
         } else {
-            return (row1 - row2 == 1 && col1 == col2);
+            var [col1, row1] = findPosition(ident1, state);
+            var [col2, row2] = findPosition(ident2, state);
+            if (row1 - row2 == 1 && col1 == col2) {
+                return true;
+            } else {
+                return false;
+            }
         }
     }
     export function isLeftof(ident1: string, ident2: string, state: WorldState): boolean {
