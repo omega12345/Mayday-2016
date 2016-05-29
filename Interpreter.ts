@@ -37,18 +37,20 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     export function interpret(parses : Parser.ParseResult[], currentState : WorldState) : InterpretationResult[] {
         var errors : Error[] = [];
         var interpretations : InterpretationResult[] = [];
+        var parsesWithInterpretations : Parser.Command[] = [];
         parses.forEach((parseresult) => {
             try {
                 var result : InterpretationResult = <InterpretationResult>parseresult;
                 result.interpretation = interpretCommand(result.parse, currentState);
                 interpretations.push(result);
+                parsesWithInterpretations.push(parseresult.parse);
             } catch(err) {
                 errors.push(err);
             }
         });
         if (interpretations.length>1)
             //Handles different interpretations as a result of multiple parse trees.
-            verbalizeDifference (interpretations);
+            verbalizeDifference (parsesWithInterpretations);
         if (interpretations.length) {
             return interpretations;
         } else {
@@ -518,7 +520,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 
     //If the results in the list differ, throws an error describing the difference.
     //Otherwise, does nothing.
-    function verbalizeDifference(input : InterpretationResult[]) : void {
+    function verbalizeDifference(input : Parser.Command[]) : void {
         
         throw "Your statement is ambiguous. Please clarify.";
     }
