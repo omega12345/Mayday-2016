@@ -55,39 +55,35 @@ function aStarSearch<Node> (
     heuristics : (n:Node) => number,
     timeout : number
 ) : SearchResult<Node> {
-        console.log("Beginning search");
-	//the number represents g, the cost to get from start to this node
+        //UPDATE: The the first number is g, the second is the heuristic
 	//The second node is the parent, used to reconstruct the path
-	var open:[Node, number, Node][]=[];
-	var closed:[Node, number, Node][]=[];
-	open.push([start,0, undefined]);  
+	var open:[Node, number, number, Node][]=[];
+	var closed:[Node, number, number, Node][]=[];
+	open.push([start,0, heuristics(start), undefined]);  
         var begin = Date.now();
 	while (open.length>0 && (Date.now()-begin)<=timeout*1000){
 		//find the node with the least f (g+heuristic) on open list
 		var index:number=0;
-		var minf:number = open[index][1]+heuristics(open[index][0]);
+		var minf:number = open[index][1]+open[index][2];
 		for (var i = 0; i<open.length;i++){
-			if(minf>=open[i][1]+heuristics(open[i][0])){
+			if(minf>=open[i][1]+open[i][2]){
 				index=i;
-				minf=open[index][1]+heuristics(open[index][0]);
+				minf=open[index][1]+open[index][2];
 			}
 		}
-		var q:[Node, number, Node] = open.splice(index, 1)[0];
-		var edges:Edge<Node>[]= graph.outgoingEdges(q[0]);
-		loop: for (var i=0; i<edges.length; i++){
-			var next:Node = edges[i].to;
-			if(goal(next)){
+		var q:[Node, number, number, Node] = open.splice(index, 1)[0];
+                if(goal(q[0])){
                             //at this point, reconstruct path and return
                             //there seems to be something the matter with the tests:
                             //they pass the reverse of the following instead of demanding the
                             //whole reconstruction
-                            var p:Node[] = [next, q[0]];
-                            next=q[2];
+                            var p:Node[] = [q[0]];
+                            var next=q[3];
                             while(next){
                                 p.push(next);
                                 for (var i =0; i<closed.length; i++){
                                     if(closed[i][0]==next){
-                                        next=closed[i][2];
+                                        next=closed[i][3];
                                         break;
                                     }
                                 }
@@ -95,12 +91,14 @@ function aStarSearch<Node> (
                             p.reverse();
                             var result : SearchResult<Node> = {
         			path: p,
-        			cost: q[1]+1
+        			cost: q[1]
                             };
                             return result;
-			}
-			//if the node is in open list with lower g (the heuristic
-			//always being the same), skip.
+		}
+		var edges:Edge<Node>[]= graph.outgoingEdges(q[0]);
+		loop: for (var i=0; i<edges.length; i++){
+			var next:Node = edges[i].to;
+			//if the node is in open list with lower g (the heuristic being the same), skip.
 			for (var j = 0; j<open.length;j++){
 				if(graph.compareNodes(open[j][0],next)==0&&open[j][1]<=q[1]+1){
 					continue loop;
@@ -109,12 +107,10 @@ function aStarSearch<Node> (
 			//same for the closed list
 			for (var j = 0; j<closed.length;j++){
 				if(graph.compareNodes(closed[j][0],next)==0){
-                                    //if(closed[j][1]<=q[1]+1)
 					continue loop;
-                                    //closed.splice(j,1);
 				}
 			}
-			open.push([next,q[1]+1,q[0]]);
+			open.push([next,q[1]+1,heuristics(next),q[0]]);
 		} 
                 closed.push(q);
 	}
