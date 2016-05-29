@@ -23,9 +23,6 @@ module Planner {
      * @returns Augments Interpreter.InterpretationResult with a plan represented by a list of strings.
      */
     export function plan(interpretations : Interpreter.InterpretationResult[], currentState : WorldState) : PlannerResult[] {
-        if (interpretations.length>1)
-            throw new Error(verbalizeDifference(interpretations) +
-                                " Please clarify your question.");
         var errors : Error[] = [];
         var plans : PlannerResult[] = [];
         interpretations.forEach((interpretation) => {
@@ -119,58 +116,48 @@ module Planner {
                                       heuristic,
                                       10); 
         //now take the search result and turn it into a set of moves
-        plan.push("Found the following result:" + searchResult);
+        //plan.push("Found the following result:" + searchResult);
+        var noLefts: number = 0;
+        var noRights: number = 0;
         for (var i = 0; i<searchResult.path.length-1; i++){
             var graph: myGraph = new myGraph;
             var edges: AnnotatedEdge[] = graph.outgoingEdges(searchResult.path[i]);
+            
             for (var edge = 0; edge<edges.length; edge++){
-                if (graph.compareNodes(edges[edge].to, searchResult.path[i+1])==0)
+                if (graph.compareNodes(edges[edge].to, searchResult.path[i+1])==0){
                     plan.push(edges[edge].action);
+                    switch (edges[edge].action){
+                        case "p": if (noLefts>0){
+                                    plan.push("Moving " + noLefts + " steps left");
+                                    noLefts = 0;
+                                  }
+                                  if (noRights>0){
+                                    plan.push("Moving " + noRights + " steps left");
+                                    noRights = 0;
+                                  }
+                                  plan.push ("Picking up the " + describeConcisely(edges[edge].to.holding, edges[edge].from));
+                                  break;
+                        case "d":if (noLefts>0){
+                                    plan.push("Moving " + noLefts + " steps left");
+                                    noLefts = 0;
+                                  }
+                                  if (noRights>0){
+                                    plan.push("Moving " + noRights + " steps left");
+                                    noRights = 0;
+                                  }
+                                  plan.push ("Putting down the " + describeConcisely(edges[edge].from.holding, edges[edge].to));
+                                  break;
+                        case "l": noLefts++;
+                                  break;
+                        case "r": noRights++;
+                                  break;
+                        default: plan.push("Found strange action: " + edges[edge].action);
+                                break;
+                    }
+                }
             }
             //plan.push(searchResult.path[i].action);
         }
-        /*do {
-            var pickstack = Math.floor(Math.random() * state.stacks.length);
-        } while (state.stacks[pickstack].length == 0);
-        
-        //plan.push("r");
-        // First move the arm to the leftmost nonempty stack
-        if (pickstack < state.arm) {
-            
-            plan.push("Moving left");
-            for (var i = state.arm; i > pickstack; i--) {
-                plan.push("l");
-            }
-        } else if (pickstack > state.arm) {
-            plan.push("Moving right");
-            for (var i = state.arm; i < pickstack; i++) {
-                plan.push("r");
-            }
-        }
-
-        // Then pick up the object
-        var obj = state.stacks[pickstack][state.stacks[pickstack].length-1];
-        plan.push("Picking up the " + state.objects[obj].form,
-                  "p");
-
-        if (pickstack < state.stacks.length-1) {
-            // Then move to the rightmost stack
-            plan.push("Moving as far right as possible");
-            for (var i = pickstack; i < state.stacks.length-1; i++) {
-                plan.push("r");
-            }
-
-            // Then move back
-            plan.push("Moving back");
-            for (var i = state.stacks.length-1; i > pickstack; i--) {
-                plan.push("l");
-            }
-        }
-
-        // Finally put it down again
-        plan.push("Dropping the " + state.objects[obj].form,
-                  "d");
-                  */
         return plan;
     }
 
@@ -181,16 +168,9 @@ module Planner {
                                             (n.holding ==int.args[0] && !int.polarity))
                                                 adheres=false;
                                         break;
-                        case "inside":  adheres = Interpreter.isInside(int.args[0], int.args[1], n);
-                                        break; //a synonym for ontop
-                        case "ontop":   adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
+                        default:  adheres = Interpreter.isTrueRelation(int.args[0], int.args[1], int.relation, n);
                                         break;
-                        case "above":   adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
-                                        break;
-                        case "under":   adheres = Interpreter.isAbove(int.args[1], int.args[0], n);
-                                        break;
-                        case "beside":  throw "TODO";
-                        default: throw new Error("Missed a case: " + int.relation);
+                        //default: throw new Error("Missed a case: " + int.relation);
                     }
         return adheres;
     }
@@ -270,9 +250,33 @@ module Planner {
         };
     }
 
-    function verbalizeDifference(input : Interpreter.InterpretationResult[]) : String {
-        
-        return "I am pre-verbal.";
+    //finds the most concise description of an object in the world.
+    //Assumes that no objects are being held.
+    export function describeConcisely(object:string, world:WorldState):string{
+        //all the objects.
+        var objects: string[] = Array.prototype.concat.apply([], world.stacks);
+        var thisObject = world.objects[object];
+        var sameKind : string[] = [];
+        //world.objects[identifier] hold all the information
+        //now we essentially filter out all objects of a different type from objects
+        for (var i = 0; i<objects.length; i++){
+            if (thisObject.form == world.objects[objects[i]].form)
+                sameKind.push(objects[i]);
+        }
+        //if it is the only one of its kind, this is enough
+        if (sameKind.length==1) return thisObject.form;
+        //check if colour makes this a sufficient description
+        var onlyOne = true;
+        for (var i = 0; i<sameKind.length; i++)
+            onlyOne = !(thisObject.color == world.objects[objects[i]].color);
+        if (onlyOne) return thisObject.color + " " + thisObject.form;
+        onlyOne = true;
+        //Do the same for size
+        for (var i = 0; i<sameKind.length; i++)
+            onlyOne = !(thisObject.size == world.objects[objects[i]].size);
+        if (onlyOne) return thisObject.size + " " + thisObject.form;
+        //otherwise, return the whole description
+        return thisObject.size + " " + thisObject.color + " " + thisObject.form;
     }
 
 }

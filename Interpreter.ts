@@ -46,6 +46,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
                 errors.push(err);
             }
         });
+        if (interpretations.length>1)
+            //Handles different interpretations as a result of multiple parse trees.
+            verbalizeDifference (interpretations);
         if (interpretations.length) {
             return interpretations;
         } else {
@@ -278,7 +281,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     } 
 
     /* checks if ident1 has a relation with ident2 */
-    function isTrueRelation(i1: string, i2: string, relation: string, state: WorldState) {    	
+    export function isTrueRelation(i1: string, i2: string, relation: string, state: WorldState) {    	
         if (relation == "ontop") {
             return isOntop(i1, i2, state);
         } else if (relation == "inside") {
@@ -294,8 +297,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         } else if (relation == "rightof") {
             return isRightof(i1, i2, state);
         } else {
-            // or thow exception instead ??? 
-            return false;
+            throw "Found unknown relation: " + relation;
         }
     }
  
@@ -512,6 +514,13 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 			}
 		}
 		return allLists;
+    }
+
+    //If the results in the list differ, throws an error describing the difference.
+    //Otherwise, does nothing.
+    function verbalizeDifference(input : InterpretationResult[]) : void {
+        
+        throw "Your statement is ambiguous. Please clarify.";
     }
 
 }
