@@ -95,16 +95,21 @@ var Interpreter;
     function interpret(parses, currentState) {
         var errors = [];
         var interpretations = [];
+        var parsesWithInterpretations = [];
         parses.forEach(function (parseresult) {
             try {
                 var result = parseresult;
                 result.interpretation = interpretCommand(result.parse, currentState);
                 interpretations.push(result);
+                parsesWithInterpretations.push(parseresult.parse);
             }
             catch (err) {
                 errors.push(err);
             }
         });
+        //if (interpretations.length>1)
+        //Handles different interpretations as a result of multiple parse trees.
+        //verbalizeDifference (parsesWithInterpretations);
         if (interpretations.length) {
             return interpretations;
         }
@@ -140,12 +145,12 @@ var Interpreter;
      */
     function interpretCommand(cmd, state) {
         var interpretation = [];
+        var e = cmd.entity;
+        var q = e.quantifier;
         // 3 commands : take, move, put 
         if (cmd.command == "take") {
-            var e = cmd.entity;
-            var q = e.quantifier;
             var idents = find_solution(e.object, state).filter(function (i) { return i != "floor"; });
-            console.log(idents);
+            //console.log(idents);
             if (q == "any" || q == "a") {
                 for (var i = 0; i < idents.length; i++) {
                     interpretation.push([{ polarity: true, relation: "holding", args: [idents[i]] }]);
@@ -153,10 +158,11 @@ var Interpreter;
             }
             else if (q == "the") {
                 if (idents.length > 1) {
+                    //TODO add clarification question
                     throw new Error("clarify");
                 }
                 else if (idents.length == 0) {
-                    throw new Error("Index Out of Bounds"); // no satisfied identifier
+                    throw new Error("No such object."); // no satisfied identifier
                 }
                 else {
                     interpretation.push([{ polarity: true, relation: "holding", args: idents }]);
@@ -217,12 +223,24 @@ var Interpreter;
                     }
                 }
                 else if (q2 == "all") {
-                    for (var i = 0; i < idents1.length; i++) {
-                        if (idents2.every(function (e) { return isOkRelation(idents1[i], e, relation, state); })) {
+                    for (var i = 0; i < idents2.length; i++) {
+                        if (idents1.every(function (e) { return isOkRelation(e, idents2[i], relation, state); })) {
                             var conj = [];
-                            for (var j = 0; j < idents2.length; j++) {
-                                conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
+                            for (var j = 0; j < idents1.length; j++) {
+                                conj.push({ polarity: true, relation: relation, args: [idents1[j], idents2[i]] });
                             }
+                            interpretation.push(conj);
+                        }
+                    }
+                    var pers = permutation(idents2, idents1.length);
+                    for (var j = 0; j < pers.length; j++) {
+                        var conj = [];
+                        for (var i = 0; i < idents1.length; i++) {
+                            if (isOkRelation(idents1[i], pers[j][i], relation, state)) {
+                                conj.push({ polarity: true, relation: relation, args: [idents1[i], pers[j][i]] });
+                            }
+                        }
+                        if (conj.length == idents1.length) {
                             interpretation.push(conj);
                         }
                     }
@@ -241,34 +259,15 @@ var Interpreter;
             }
         }
         else if (cmd.command == "put") {
-            if (state.holding == "") {
-                throw new Error("not holding anything");
-            }
-            else {
-                var hold_ident = state.holding;
-                var loc = cmd.location;
-                var ent = loc.entity;
-                var rel = loc.relation;
-                var idents = find_solution(ent.object, state);
-                if (idents.length == 1) {
-                    if (isOkRelation(hold_ident, idents[0], rel, state)) {
-                        interpretation.push([{ polarity: true, relation: relation, args: [hold_ident, idents[0]] }]);
-                    }
-                    else {
-                        throw new Error("can not move the holding object to the given location");
-                    }
-                }
-                else if (idents.length > 1) {
-                    throw new Error("clarify");
-                }
-                else {
-                    throw new Error("Index Out of Bounds");
-                }
-            }
+            throw "Found put command";
         }
         if (interpretation.length == 0) {
-            throw new Error("Index Out of Bounds");
+            throw new Error("Failed to find an interpretation.");
         }
+        if (state.holding != null)
+            throw "Holding something";
+        console.log(state.holding); // state.holding always give null, no matter it holding, why????
+        console.log(interpretation[0]);
         return interpretation;
     }
     function find_solution(obj, state) {
@@ -339,10 +338,10 @@ var Interpreter;
             return isRightof(i1, i2, state);
         }
         else {
-            // or thow exception instead ??? 
-            return false;
+            throw "Found unknown relation: " + relation;
         }
     }
+    Interpreter.isTrueRelation = isTrueRelation;
     function separate_obj(obj) {
         var location = obj.location;
         var ent = location.entity;
@@ -572,6 +571,32 @@ var Interpreter;
             }
         }
         return allLists;
+    }
+    /* given a set 's' and a length 'l',
+       return a list of permutations of the set 's' with length l for each permutation.
+       for intance: if s = ["a","b","c"] and l = 2 =>
+       [["a","b"],["a","c"],["b","a"],["b","c"],["c","a"],["c","b"]] */
+    function permutation(s, l) {
+        return permutationHelp([], s, l);
+    }
+    function permutationHelp(prefix, s, l) {
+        if (l == 0) {
+            return [prefix];
+        }
+        else {
+            var result = [];
+            var leng = s.length;
+            for (var i = 0; i < leng; i++) {
+                var p = permutationHelp(prefix.concat(s[i]), s.slice(0, i).concat(s.slice(i + 1, leng)), l - 1);
+                result = result.concat(p);
+            }
+            return result;
+        }
+    }
+    //If the results in the list differ, throws an error describing the difference.
+    //Otherwise, does nothing.
+    function verbalizeDifference(input) {
+        throw "Your statement is ambiguous. Please clarify.";
     }
 })(Interpreter || (Interpreter = {}));
 /*
@@ -3124,52 +3149,50 @@ var SearchResult = (function () {
 * @returns A search result, which contains the path from `start` to a node satisfying `goal` and the cost of this path.
 */
 function aStarSearch(graph, start, goal, heuristics, timeout) {
-    console.log("Beginning search");
-    //the number represents g, the cost to get from start to this node
+    //UPDATE: The the first number is g, the second is the heuristic
     //The second node is the parent, used to reconstruct the path
     var open = [];
     var closed = [];
-    open.push([start, 0, undefined]);
+    open.push([start, 0, heuristics(start), undefined]);
     var begin = Date.now();
     while (open.length > 0 && (Date.now() - begin) <= timeout * 1000) {
         //find the node with the least f (g+heuristic) on open list
         var index = 0;
-        var minf = open[index][1] + heuristics(open[index][0]);
+        var minf = open[index][1] + open[index][2];
         for (var i = 0; i < open.length; i++) {
-            if (minf >= open[i][1] + heuristics(open[i][0])) {
+            if (minf >= open[i][1] + open[i][2]) {
                 index = i;
-                minf = open[index][1] + heuristics(open[index][0]);
+                minf = open[index][1] + open[index][2];
             }
         }
         var q = open.splice(index, 1)[0];
+        if (goal(q[0])) {
+            //at this point, reconstruct path and return
+            //there seems to be something the matter with the tests:
+            //they pass the reverse of the following instead of demanding the
+            //whole reconstruction
+            var p = [q[0]];
+            var next = q[3];
+            while (next) {
+                p.push(next);
+                for (var i = 0; i < closed.length; i++) {
+                    if (closed[i][0] == next) {
+                        next = closed[i][3];
+                        break;
+                    }
+                }
+            }
+            p.reverse();
+            var result = {
+                path: p,
+                cost: q[1]
+            };
+            return result;
+        }
         var edges = graph.outgoingEdges(q[0]);
         loop: for (var i = 0; i < edges.length; i++) {
             var next = edges[i].to;
-            if (goal(next)) {
-                //at this point, reconstruct path and return
-                //there seems to be something the matter with the tests:
-                //they pass the reverse of the following instead of demanding the
-                //whole reconstruction
-                var p = [next, q[0]];
-                next = q[2];
-                while (next) {
-                    p.push(next);
-                    for (var i = 0; i < closed.length; i++) {
-                        if (closed[i][0] == next) {
-                            next = closed[i][2];
-                            break;
-                        }
-                    }
-                }
-                p.reverse();
-                var result = {
-                    path: p,
-                    cost: q[1] + 1
-                };
-                return result;
-            }
-            //if the node is in open list with lower g (the heuristic
-            //always being the same), skip.
+            //if the node is in open list with lower g (the heuristic being the same), skip.
             for (var j = 0; j < open.length; j++) {
                 if (graph.compareNodes(open[j][0], next) == 0 && open[j][1] <= q[1] + 1) {
                     continue loop;
@@ -3178,11 +3201,10 @@ function aStarSearch(graph, start, goal, heuristics, timeout) {
             //same for the closed list
             for (var j = 0; j < closed.length; j++) {
                 if (graph.compareNodes(closed[j][0], next) == 0) {
-                    //if(closed[j][1]<=q[1]+1)
                     continue loop;
                 }
             }
-            open.push([next, q[1] + 1, q[0]]);
+            open.push([next, q[1] + 1, heuristics(next), q[0]]);
         }
         closed.push(q);
     }
@@ -3214,9 +3236,6 @@ var Planner;
      * @returns Augments Interpreter.InterpretationResult with a plan represented by a list of strings.
      */
     function plan(interpretations, currentState) {
-        if (interpretations.length > 1)
-            throw new Error(verbalizeDifference(interpretations) +
-                " Please clarify your question.");
         var errors = [];
         var plans = [];
         interpretations.forEach(function (interpretation) {
@@ -3275,27 +3294,8 @@ var Planner;
             for (var i = 0; i < interpretation.length; i++) {
                 var adheres = true;
                 for (var j = 0; j < interpretation[i].length; j++) {
-                    //TODO
-                    //set adheres to false if state does not fulfill requirements
                     var int = interpretation[i][j];
-                    switch (int.relation) {
-                        case "holding":
-                            if ((n.holding !== int.args[0] && int.polarity) ||
-                                (state.holding == int.args[0] && !int.polarity))
-                                adheres = false;
-                            break;
-                        case "inside": //a synonym for ontop
-                        case "ontop":
-                            adheres = Interpreter.isOntop(int.args[0], int.args[1], n);
-                            break;
-                        case "above":
-                            adheres = Interpreter.isAbove(int.args[0], int.args[1], n);
-                            break;
-                        case "under":
-                            adheres = Interpreter.isAbove(int.args[1], int.args[0], n);
-                            break;
-                        default: throw new Error("Missed a case: " + interpretation[i][j].relation);
-                    }
+                    adheres = literalIsTheCase(n, int);
                 }
                 if (adheres)
                     return adheres;
@@ -3303,63 +3303,90 @@ var Planner;
             ;
             return false;
         };
+        var heuristic = function (n) {
+            if (!interpretation.length)
+                return 0;
+            var minToDo = 0;
+            for (var j = 0; j < interpretation[0].length; j++) {
+                var int = interpretation[0][j];
+                if (!literalIsTheCase(n, int))
+                    minToDo++;
+            }
+            for (var i = 0; i < interpretation.length; i++) {
+                var toDoHere = 0;
+                for (var j = 0; j < interpretation[i].length; j++) {
+                    var int = interpretation[i][j];
+                    if (!literalIsTheCase(n, int))
+                        toDoHere++;
+                }
+                minToDo = Math.min(minToDo, toDoHere);
+            }
+            ;
+            return minToDo;
+        };
         //console.log("About to begin search");
-        var searchResult = aStarSearch(new myGraph, state, isGoal, 
-        //TODO invent heuristic
-        function (n) { return 0; }, 10);
+        var searchResult = aStarSearch(new myGraph, state, isGoal, heuristic, 10);
         //now take the search result and turn it into a set of moves
-        plan.push("Found the following result:" + searchResult);
+        //plan.push("Found the following result:" + searchResult);
+        var noLefts = 0;
+        var noRights = 0;
         for (var i = 0; i < searchResult.path.length - 1; i++) {
             var graph = new myGraph;
             var edges = graph.outgoingEdges(searchResult.path[i]);
             for (var edge = 0; edge < edges.length; edge++) {
-                if (graph.compareNodes(edges[edge].to, searchResult.path[i + 1]) == 0)
+                if (graph.compareNodes(edges[edge].to, searchResult.path[i + 1]) == 0) {
                     plan.push(edges[edge].action);
+                    switch (edges[edge].action) {
+                        case "p":
+                            if (noLefts > 0) {
+                                plan.push("Moving " + noLefts + " steps left");
+                                noLefts = 0;
+                            }
+                            if (noRights > 0) {
+                                plan.push("Moving " + noRights + " steps left");
+                                noRights = 0;
+                            }
+                            plan.push("Picking up the " + describeConcisely(edges[edge].to.holding, edges[edge].from));
+                            break;
+                        case "d":
+                            if (noLefts > 0) {
+                                plan.push("Moving " + noLefts + " steps left");
+                                noLefts = 0;
+                            }
+                            if (noRights > 0) {
+                                plan.push("Moving " + noRights + " steps left");
+                                noRights = 0;
+                            }
+                            plan.push("Putting down the " + describeConcisely(edges[edge].from.holding, edges[edge].to));
+                            break;
+                        case "l":
+                            noLefts++;
+                            break;
+                        case "r":
+                            noRights++;
+                            break;
+                        default:
+                            plan.push("Found strange action: " + edges[edge].action);
+                            break;
+                    }
+                }
             }
         }
-        /*do {
-            var pickstack = Math.floor(Math.random() * state.stacks.length);
-        } while (state.stacks[pickstack].length == 0);
-        
-        //plan.push("r");
-        // First move the arm to the leftmost nonempty stack
-        if (pickstack < state.arm) {
-            
-            plan.push("Moving left");
-            for (var i = state.arm; i > pickstack; i--) {
-                plan.push("l");
-            }
-        } else if (pickstack > state.arm) {
-            plan.push("Moving right");
-            for (var i = state.arm; i < pickstack; i++) {
-                plan.push("r");
-            }
-        }
-
-        // Then pick up the object
-        var obj = state.stacks[pickstack][state.stacks[pickstack].length-1];
-        plan.push("Picking up the " + state.objects[obj].form,
-                  "p");
-
-        if (pickstack < state.stacks.length-1) {
-            // Then move to the rightmost stack
-            plan.push("Moving as far right as possible");
-            for (var i = pickstack; i < state.stacks.length-1; i++) {
-                plan.push("r");
-            }
-
-            // Then move back
-            plan.push("Moving back");
-            for (var i = state.stacks.length-1; i > pickstack; i--) {
-                plan.push("l");
-            }
-        }
-
-        // Finally put it down again
-        plan.push("Dropping the " + state.objects[obj].form,
-                  "d");
-                  */
         return plan;
+    }
+    function literalIsTheCase(n, int) {
+        var adheres = true;
+        switch (int.relation) {
+            case "holding":
+                if ((n.holding !== int.args[0] && int.polarity) ||
+                    (n.holding == int.args[0] && !int.polarity))
+                    adheres = false;
+                break;
+            default:
+                adheres = Interpreter.isTrueRelation(int.args[0], int.args[1], int.relation, n);
+                break;
+        }
+        return adheres;
     }
     var myGraph = (function () {
         function myGraph() {
@@ -3442,9 +3469,38 @@ var Planner;
             examples: world.examples
         };
     }
-    function verbalizeDifference(input) {
-        return "I am pre-verbal.";
+    //finds the most concise description of an object in the world.
+    //Assumes that no objects are being held.
+    function describeConcisely(object, world) {
+        //all the objects.
+        var objects = Array.prototype.concat.apply([], world.stacks);
+        var thisObject = world.objects[object];
+        var sameKind = [];
+        //world.objects[identifier] hold all the information
+        //now we essentially filter out all objects of a different type from objects
+        for (var i = 0; i < objects.length; i++) {
+            if (thisObject.form == world.objects[objects[i]].form)
+                sameKind.push(objects[i]);
+        }
+        //if it is the only one of its kind, this is enough
+        if (sameKind.length == 1)
+            return thisObject.form;
+        //check if colour makes this a sufficient description
+        var onlyOne = true;
+        for (var i = 0; i < sameKind.length; i++)
+            onlyOne = !(thisObject.color == world.objects[objects[i]].color);
+        if (onlyOne)
+            return thisObject.color + " " + thisObject.form;
+        onlyOne = true;
+        //Do the same for size
+        for (var i = 0; i < sameKind.length; i++)
+            onlyOne = !(thisObject.size == world.objects[objects[i]].size);
+        if (onlyOne)
+            return thisObject.size + " " + thisObject.form;
+        //otherwise, return the whole description
+        return thisObject.size + " " + thisObject.color + " " + thisObject.form;
     }
+    Planner.describeConcisely = describeConcisely;
 })(Planner || (Planner = {}));
 ///<reference path="World.ts"/>
 ///<reference path="Parser.ts"/>
@@ -3886,39 +3942,32 @@ var allTestCases = [
     },
     { world: "small",
         utterance: "put a black ball in a box on the floor",
-        interpretations: [["inside(f,k)"], ["ontop(f,floor)"]]
+        interpretations: [["ontop(f,floor)"], ["inside(f,k)"]]
     }
 ];
 // /* Simple test cases for the ALL quantifier, uncomment if you want */
-// allTestCases.push(
-//     {world: "small",
-//      utterance: "put all balls on the floor",
-//      interpretations: [["ontop(e,floor) & ontop(f,floor)"]]
-//     },
-//     {world: "small",
-//      utterance: "put every ball to the right of all blue things",
-//      interpretations: [["rightof(e,g) & rightof(e,m) & rightof(f,g) & rightof(f,m)"]]
-//     },
-//     {world: "small",
-//      utterance: "put all balls left of a box on the floor",
-//      interpretations: [["leftof(e,k) & leftof(f,k)"], ["ontop(e,floor)"]]
-//     }
-// );
+allTestCases.push({ world: "small",
+    utterance: "put all balls on the floor",
+    interpretations: [["ontop(e,floor) & ontop(f,floor)"]]
+}, { world: "small",
+    utterance: "put every ball to the right of all blue things",
+    interpretations: [["rightof(e,g) & rightof(e,m) & rightof(f,g) & rightof(f,m)"]]
+}, { world: "small",
+    utterance: "put all balls left of a box on the floor",
+    interpretations: [["leftof(e,k) & leftof(f,k)"], ["ontop(e,floor)"]]
+});
 // /* More dubious examples for the ALL quantifier */
 // /* (i.e., it's not clear that these interpretations are the best) */
-// allTestCases.push(
-//     {world: "small",
-//      utterance: "put a ball in every large box",
-//      interpretations: [["inside(e,k) & inside(f,k)", "inside(e,l) & inside(f,k)",
-//                         "inside(e,k) & inside(f,l)", "inside(e,l) & inside(f,l)"]]
-//     },
-//     {world: "small",
-//      utterance: "put every ball in a box",
-//      interpretations: [["inside(e,k) & inside(f,k)", "inside(e,l) & inside(f,k)",
-//                         "inside(e,k) & inside(f,l)", "inside(e,l) & inside(f,l)",
-//                         "inside(e,k) & inside(f,m)", "inside(e,l) & inside(f,m)"]]
-//     }
-// );
+allTestCases.push({ world: "small",
+    utterance: "put a ball in every large box",
+    interpretations: [["inside(e,k) & inside(f,k)", "inside(e,l) & inside(f,k)",
+            "inside(e,k) & inside(f,l)", "inside(e,l) & inside(f,l)"]]
+}, { world: "small",
+    utterance: "put every ball in a box",
+    interpretations: [["inside(e,k) & inside(f,k)", "inside(e,l) & inside(f,k)",
+            "inside(e,k) & inside(f,l)", "inside(e,l) & inside(f,l)",
+            "inside(e,k) & inside(f,m)", "inside(e,l) & inside(f,m)"]]
+});
 ///<reference path="Shrdlite.ts"/>
 ///<reference path="TextWorld.ts"/>
 ///<reference path="ExampleWorlds.ts"/>

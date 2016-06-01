@@ -27,7 +27,6 @@ function testInterpreter(testcase : TestCase) : boolean {
     catch(err) {
         interpretations = [];
     }
-
     console.log("Correct interpretations:");
     var n = 0;
     interpretations.forEach((intp) => {

@@ -48,9 +48,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
                 errors.push(err);
             }
         });
-        if (interpretations.length>1)
+        //if (interpretations.length>1)
             //Handles different interpretations as a result of multiple parse trees.
-            verbalizeDifference (parsesWithInterpretations);
+            //verbalizeDifference (parsesWithInterpretations);
         if (interpretations.length) {
             return interpretations;
         } else {
@@ -111,122 +111,141 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
      */
     function interpretCommand(cmd : Parser.Command, state : WorldState) : DNFFormula {
         var interpretation: DNFFormula = [];
-        
         // 3 commands : take, move, put 
-        if (cmd.command == "take") {
+        if (cmd.command == "take") { 
+            
             var e: Parser.Entity = cmd.entity;
             var q: string = e.quantifier;
             var idents: string[] = find_solution(e.object, state).filter(i => i != "floor");
-            console.log(idents);
+            
+            if (idents.length<1) throw "No such object.";
             if (q == "any" || q == "a") {
+                                 
 				for (var i = 0; i < idents.length; i++) {
+                                        
 					interpretation.push([{ polarity: true, relation: "holding", args: [idents[i]] }]);
 				}
             } else if (q == "the" ) {
+                                
 				if (idents.length > 1) {
-					throw new Error("clarify");
-				} else if (idents.length == 0) {
-					throw new Error("No such object."); // no satisfied identifier
+                                        describeDifference(idents, state);
 				} else { 
 					interpretation.push([{ polarity: true, relation: "holding", args: idents }]);
 				}
             } else if (q == "all") {
 				if (idents.length > 1) {
-					throw new Error("can not take more than one object");
-				} else if (idents.length == 1){
+					throw new Error("Cannot hold more than one object");
+				} else{
 					interpretation.push([{ polarity: true, relation: "holding", args: idents }]);	
 				} 
             }
 
         } else if (cmd.command == "move") {
-            var e1: Parser.Entity = cmd.entity;
-            var q1: string = e1.quantifier;
-			var relation: string = cmd.location.relation;
+            var e: Parser.Entity = cmd.entity;
+            
+            var idents: string[] = find_solution(e.object, state).filter(i => i != "floor");
+            if (idents.length<1) throw "No such object.";
+            var relation: string = cmd.location.relation;
             var e2: Parser.Entity = cmd.location.entity; 
             var q2: string = e2.quantifier;
-            var idents1: string[] = find_solution(e1.object, state).filter(i => i != "floor");
             var idents2: string[] = find_solution(e2.object, state);
-            
-            if (q1 == "the" && idents1.length > 1) {
-				throw new Error("clarify");
+            if (q == "the" && idents.length > 1) {
+                                describeDifference(idents, state);
             } else if (q2 == "the" && idents2.length > 1) {
-				throw new Error("clarify");
-            } else { // no difference between 'the' and 'any'
-                                
-				if (q1 == "all" && q2 == "all") { // 'all' to 'all'
-                                
-					if(idents1.length == idents2.length && 
-					   idents2.every(elem2 => idents1.every(elem1 => isOkRelation(elem1,elem2,relation,state)))) {
-						var conj: Conjunction = [];
-						for (var i = 0; i < idents2.length; i++) {
-							if (idents1.every(elem1 => isOkRelation(elem1, idents2[i], relation, state))) {
-								for (var j = 0; j < idents1.length; j++) {
-									conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
-								}
-							}
-						}
-					}
-					if (conj.length != 0) {
-						interpretation.push(conj);
-					}
-				} else if (q1 == "all" ) { // 'all' to 'any'
-                                    
-					var lists: string[][] = getAllLists(idents2, idents1.length);
-					for (var j = 0; j < lists.length; j++) {
-						var conj: Conjunction = [];
-						for (var i = 0; i < idents1.length; i++) {
-							if (isOkRelation(idents1[i], lists[j][i], relation, state)) {
-								conj.push({ polarity: true, relation: relation, args: [idents1[i], lists[j][i]] });
-							}
-						}
-						if (conj.length == idents1.length) {
-							interpretation.push(conj);
-						}
-					}
-				} else if (q2 == "all") { // 'any' to 'all'
-					for (var i = 0; i < idents1.length; i++) {
-						if (idents2.every(e => isOkRelation(idents1[i],e,relation,state))) {
-							var conj: Conjunction = [];
-							for (var j = 0; j < idents2.length; j++) {
-								conj.push({ polarity: true, relation: relation, args: [idents1[i], idents2[j]] });
-							}
-							interpretation.push(conj);
-						}
-					}
-				} else { // 'any' to 'any' 
-					for (var i = 0; i < idents1.length; i++) {
+				describeDifference(idents, state);
+            } else { // no difference between 'the' and 'any'  
+		
+                if (q == "all" && q2 == "all") { // 'all' to 'all'
+                    
+                    var conj: Conjunction = [];
+                    if(idents2.every(elem2 => idents.every(elem1 => isOkRelation(elem1,elem2,relation,state)))) {
+                            for (var i = 0; i < idents.length; i++) {
+                                    for (var j = 0; j < idents2.length; j++) {
+					conj.push({ polarity: true, relation: relation, args: [idents[i], idents2[j]] });
+                                    }
+                            }
+			}
+                    if (conj.length !== 0) {
+			interpretation.push(conj);
+                    }
+				
+                } else if (q == "all" ) { // 'all' to 'any'  
+                    
+                    var lists: string[][] = getAllLists(idents2, idents.length);
+                    for (var j = 0; j < lists.length; j++) {
+			var conj: Conjunction = [];
+			for (var i = 0; i < idents.length; i++) {
+                            if (isOkRelation(idents[i], lists[j][i], relation, state)) {
+				conj.push({ polarity: true, relation: relation, args: [idents[i], lists[j][i]] });
+                            }
+			}
+                        if (conj.length == idents.length) {
+                            interpretation.push(conj);
+                            
+                            
+                        }
+                    }
+		} else if (q2 == "all") { // 'any' to 'all'
+                    for (var i = 0; i < idents2.length; i++) {
+                        if (idents.every(e => isOkRelation(e, idents2[i], relation, state))) {
+                            var conj: Conjunction = [];
+                            for (var j = 0; j < idents.length; j++) {
+                                conj.push({ polarity: true, relation: relation, args: [idents[j], idents2[i]] });
+                            }
+                            interpretation.push(conj);
+                        }
+                    }
+                    var pers: string[][] = permutation(idents2, idents.length);
+                    for (var j = 0; j < pers.length; j++) {
+                        var conj: Conjunction = [];
+                        for (var i = 0; i < idents.length; i++) {
+                            if (isOkRelation(idents[i], pers[j][i], relation, state)) {
+                                conj.push({ polarity: true, relation: relation, args: [idents[i], pers[j][i]] });
+                            }
+                        }
+                        if (conj.length == idents.length) {
+                            interpretation.push(conj);
+                        }
+                    } 
+		} else { // 'any' to 'any' 
+                    
+                    for (var i = 0; i < idents.length; i++) {
                                                 
-						for (var j = 0; j < idents2.length; j++) {
+			for (var j = 0; j < idents2.length; j++) {
                                                 
-							if (idents1[i] != idents2[j]) {
-								if (isOkRelation(idents1[i], idents2[j], relation, state)) {								
-									interpretation.push([{ polarity: true, relation: relation, args: [idents1[i], idents2[j]] }]);
-								}
-							}
-						}
-                                                
-					} 
+                            if (idents[i] != idents2[j]) {
+				if (isOkRelation(idents[i], idents2[j], relation, state)) {								
+                                    interpretation.push([{ polarity: true, relation: relation, args: [idents[i], idents2[j]] }]);
 				}
+                            }
+			}
+                                                
+                    } 
+		}
                                     
             }
         }
         else if (cmd.command == "put") {
-			if (state.holding == "") { //not holding anything. 
+                        
+                        if (state.holding == null) { //not holding anything. 
 				throw new Error("not holding anything");
 			} else {
+                                
 				var hold_ident: string = state.holding;
 				var loc: Parser.Location = cmd.location;
 				var ent: Parser.Entity = loc.entity;
 				var rel: string = loc.relation;
+                                
 				var idents: string[] = find_solution(ent.object, state);
+                                
 				if (idents.length == 1) {
 					if (isOkRelation(hold_ident, idents[0], rel, state)) {
-						interpretation.push([{ polarity: true, relation: relation, args: [hold_ident, idents[0]] }]);
+						interpretation.push([{ polarity: true, relation: rel, args: [hold_ident, idents[0]] }]);
 					} else {
-						throw new Error("can not move the holding object to the given location");
+						throw new Error("Cannot drop this object there");
 					}
 				} else if (idents.length > 1) { 
-					throw new Error("clarify");
+					describeDifference(idents, state);
 				} else {
 					throw new Error("Did not understand command");
 				}
@@ -238,6 +257,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         return interpretation;
     }
 
+    //returns the identifier of all objects matching the description obj.
     function find_solution(obj: Parser.Object, state: WorldState): string[]{
         if (IsSimpleObj(obj)) {
             return findIdents(obj, state);
@@ -245,18 +265,18 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
           // two smaller objects, one quantifier and one relation .
         } else { 
             var [obj1,relation,quant,obj2] = separate_obj(obj);
-            var idents1 = find_solution(obj1, state);
+            var idents = find_solution(obj1, state);
             var idents2 = find_solution(obj2, state);
             if (quant == "all") {
-                var satisfied_idens1: string[] = satisfy_all(idents1, idents2, relation, state);
+                var satisfied_idens1: string[] = satisfy_all(idents, idents2, relation, state);
                 return satisfied_idens1;
             } else if (quant == "any" || quant == "a") {
-                return satisfy_any(idents1, idents2, relation, state);
+                return satisfy_any(idents, idents2, relation, state);
             } else if (quant == "the") {
                 //treat 'the' as same as 'any' 
-                return satisfy_any(idents1, idents2, relation, state);
+                return satisfy_any(idents, idents2, relation, state);
             } else {
-				throw new Error("unidentified quantifier");
+		throw new Error("unidentified quantifier in find_solution");
             }
         }
     }
@@ -282,7 +302,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         return ret;
     } 
 
-    /* checks if ident1 has a relation with ident2 */
+    /* checks if ident1 has specified relation with ident2 */
     export function isTrueRelation(i1: string, i2: string, relation: string, state: WorldState) {    	
         if (relation == "ontop") {
             return isOntop(i1, i2, state);
@@ -310,11 +330,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     }
 
     function IsSimpleObj(obj: Parser.Object): Boolean {
-        if (obj.object == null) {
-            return true;
-        } else {
-            return false;
-        }
+        return obj.object == null;
     }
 
     /* checks if object1 can be supported by object2 */  
@@ -417,7 +433,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     }
     export function isOntop(ident1: string, ident2: string, state: WorldState): boolean {
         if (ident2 == "floor") {
+            
             var [col1, row1] = findPosition(ident1, state);
+            
             return row1 == 0;
         } else if (state.objects[ident2].form == "box") {
             return false;
@@ -517,12 +535,34 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 		}
 		return allLists;
     }
+    /* given a set 's' and a length 'l', 
+       return a list of permutations of the set 's' with length l for each permutation. 
+       for intance: if s = ["a","b","c"] and l = 2 => 
+       [["a","b"],["a","c"],["b","a"],["b","c"],["c","a"],["c","b"]] */
+    function permutation(s: string[], l: number): string[][] {
+        return permutationHelp([], s, l);
+    }
 
-    //If the results in the list differ, throws an error describing the difference.
-    //Otherwise, does nothing.
+    function permutationHelp(prefix: string[], s: string[], l: number): string[][] {
+        if (l == 0) {
+            return [prefix];
+        } else {
+            var result: string[][] = [];
+            var leng: number = s.length;
+            for (var i = 0; i < leng; i++) {
+                var p = permutationHelp(prefix.concat(s[i]), s.slice(0, i).concat(s.slice(i + 1, leng)), l - 1);
+                result = result.concat(p);
+            }
+            return result;
+        }
+    }
+    //Throws an error describing the difference,
     function verbalizeDifference(input : Parser.Command[]) : void {
         
         throw "Your statement is ambiguous. Please clarify.";
+    }
+    function describeDifference(input: String[], world:WorldState):void{
+        throw "There are several object matching the description.";
     }
 
 }

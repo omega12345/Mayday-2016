@@ -80,7 +80,7 @@ module Planner {
         var plan : string[] = [];
         //A DNFFormula is a list of lists.
         //A goal state must satisfy all requirements of at least one of these lists.
-        //alert (state.stacks);
+        alert (interpretation[0][0].args);
         var isGoal = (n:WorldState)=>
             {for (var i = 0; i<interpretation.length;i++){
                 var adheres:boolean = true;
