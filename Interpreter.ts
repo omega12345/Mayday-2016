@@ -48,9 +48,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
                 errors.push(err);
             }
         });
-        //if (interpretations.length>1)
+        if (interpretations.length>1)
             //Handles different interpretations as a result of multiple parse trees.
-            //verbalizeDifference (parsesWithInterpretations);
+            verbalizeDifference (parsesWithInterpretations);
         if (interpretations.length) {
             return interpretations;
         } else {
@@ -142,7 +142,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 
         } else if (cmd.command == "move") {
             var e: Parser.Entity = cmd.entity;
-            
+            var q: string = e.quantifier;
             var idents: string[] = find_solution(e.object, state).filter(i => i != "floor");
             if (idents.length<1) throw "No such object.";
             var relation: string = cmd.location.relation;
@@ -154,7 +154,6 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
             } else if (q2 == "the" && idents2.length > 1) {
 				describeDifference(idents, state);
             } else { // no difference between 'the' and 'any'  
-		
                 if (q == "all" && q2 == "all") { // 'all' to 'all'
                     
                     var conj: Conjunction = [];
@@ -245,7 +244,23 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
 						throw new Error("Cannot drop this object there");
 					}
 				} else if (idents.length > 1) { 
-					describeDifference(idents, state);
+					if (q == "the") {
+                        describeDifference(idents, state); 
+                    } else if (q == "all") {
+                        if (idents.every(e => isOkRelation(hold_ident, e, rel, state))) {
+                            var conj: Conjunction = [];
+                            for (var i = 0; i < idents.length; i++) {
+                                conj.push({ polarity: true, relation: rel, args: [hold_ident, idents[i]] });
+                            }
+                            interpretation.push(conj);
+                        }
+                    } else { // q == "any"
+                        for (var i = 0; i < idents.length; i++) {
+                            if (isOkRelation(hold_ident, idents[i], rel, state)) {
+                                interpretation.push([{ polarity: true, relation: rel, args: [hold_ident, idents[i]] }]);
+                            }
+                        }
+                    }
 				} else {
 					throw new Error("Did not understand command");
 				}
@@ -411,61 +426,39 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     export function isBeside(ident1: string, ident2: string, state: WorldState): boolean {
         var [col1, row1] = findPosition(ident1, state);
         var [col2, row2] = findPosition(ident2, state);
-        if ((col1 - col2 == 1 && row1 == row2) || (col1 - col2 == -1 && row1 == row2)) {
-            return true;
-        } else {
-            return false;
-        }
+        return Math.abs(col1 - col2) == 1 && row1 == row2;
     }
 
     export function isInside(ident1: string, ident2: string, state: WorldState): boolean {
         if (state.objects[ident2].form == "box") { //Objects are “inside” boxes
             var [col1, row1] = findPosition(ident1, state);
             var [col2, row2] = findPosition(ident2, state);
-            if (row1 - row2 == 1 && col1 == col2) {
-                return true;
-            } else {
-                return false;
-            }
+            return row1 - row2 == 1 && col1 == col2;
         } else {
             return false;
         }
     }
     export function isOntop(ident1: string, ident2: string, state: WorldState): boolean {
         if (ident2 == "floor") {
-            
             var [col1, row1] = findPosition(ident1, state);
-            
             return row1 == 0;
         } else if (state.objects[ident2].form == "box") {
             return false;
         } else {
             var [col1, row1] = findPosition(ident1, state);
             var [col2, row2] = findPosition(ident2, state);
-            if (row1 - row2 == 1 && col1 == col2) {
-                return true;
-            } else {
-                return false;
-            }
+            return row1 - row2 == 1 && col1 == col2;
         }
     }
     export function isLeftof(ident1: string, ident2: string, state: WorldState): boolean {
         var [col1, row1] = findPosition(ident1, state);
         var [col2, row2] = findPosition(ident2, state);
-        if (col1 < col2) {
-            return true;
-        } else {
-            return false;
-        }
+        return col1 < col2;
     }
     export function isRightof(ident1: string, ident2: string, state: WorldState): boolean {
         var [col1, row1] = findPosition(ident1, state);
         var [col2, row2] = findPosition(ident2, state);
-        if (col1 > col2) {
-            return true;
-        } else {
-            return false;
-        }
+        return col1 > col2;
     }
 
 
@@ -487,10 +480,9 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     }
 
     function objectMatch(o1: Parser.Object, o2: Parser.Object): boolean {
-        var ret = ((o1.color == null || o1.color == o2.color)
+        return ((o1.color == null || o1.color == o2.color)
             && (o1.size == null || o1.size == o2.size)
             && (o1.form == "anyform" || o1.form == o2.form));
-        return ret;
     }
 
     /* find an identifier position in a world, return [column, row]. */
@@ -499,11 +491,16 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         var stacks: Stack[] = state.stacks;
         var col: number = 0;
         var row: number = 0;
-        for (var i = 0; i < stacks.length; i++) {
-            for (var j = 0; j < stacks[i].length; j++) {
-                if (stacks[i][j] == ident) {
-                    col = i;
-                    row = j;
+        if (state.holding == ident) {
+            var rowPos: number = Array.prototype.concat.apply([], [[1, 2, 3], [3, 4, 5]]).length;
+            return [state.arm, rowPos];
+        } else {
+            for (var i = 0; i < stacks.length; i++) {
+                for (var j = 0; j < stacks[i].length; j++) {
+                    if (stacks[i][j] == ident) {
+                        col = i;
+                        row = j;
+                    }
                 }
             }
         }
@@ -556,13 +553,33 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
             return result;
         }
     }
-    //Throws an error describing the difference,
+    //Throws an error describing the difference between commands.
     function verbalizeDifference(input : Parser.Command[]) : void {
+        //This simple function will assume that parse tree differences
+        //will always show in the entity to be handled, in the absence of examples to the contrary.
+        var result : string = "Your statement is ambiguous. Do you want me to manipulate "
         
+        //var i:number;
+        //for (i = 0; i<input.length-1; i++)
+          //  var in = input[i].entity;
+            //ret += in. + Planner.describeInContext(objects[i], objects) + ", ";
+        //ret += " or the " + Planner.describeInContext(objects[i], objects) + "?";
         throw "Your statement is ambiguous. Please clarify.";
     }
-    function describeDifference(input: String[], world:WorldState):void{
-        throw "There are several object matching the description.";
+
+    
+    //throws an error specifying the differences between the objects in the input list.
+    //The list must have at least two objects in it.
+    function describeDifference(input: string[], world:WorldState):void{
+        var objects: ObjectDefinition[] = []
+        for (var i = 0; i<input.length; i++)
+            objects.push(world.objects[input[i]]);
+        var ret :string = "There are several object matching the description. Did you mean ";
+        var i:number;
+        for (i = 0; i<objects.length-1; i++)
+            ret += "the " + Planner.describeInContext(objects[i], objects) + ", ";
+        ret += " or the " + Planner.describeInContext(objects[i], objects) + "?";
+        throw ret;
     }
 
 }

@@ -118,5 +118,3 @@ function aStarSearch<Node> (
         throw "Timed out.";
     throw "Open list empty but goal not reached.";
 }
-
-

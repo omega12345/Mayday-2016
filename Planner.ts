@@ -80,13 +80,13 @@ module Planner {
         var plan : string[] = [];
         //A DNFFormula is a list of lists.
         //A goal state must satisfy all requirements of at least one of these lists.
-        alert (interpretation[0][0].args);
         var isGoal = (n:WorldState)=>
             {for (var i = 0; i<interpretation.length;i++){
+                //reset adheres for each conjunction
                 var adheres:boolean = true;
                 for (var j = 0; j<interpretation[i].length;j++){
                     var int : Interpreter.Literal = interpretation[i][j];
-                    adheres = literalIsTheCase(n, int);
+                    if (!literalIsTheCase(n, int)) adheres = false;
                 }
                 if (adheres) return adheres;
             };
@@ -108,7 +108,7 @@ module Planner {
                 minToDo = Math.min (minToDo, toDoHere);
             };
             return minToDo;}
-        //console.log("About to begin search");
+        
         var searchResult : SearchResult<WorldState> 
             = aStarSearch<WorldState>(new myGraph,
                                       state,
@@ -156,22 +156,18 @@ module Planner {
                     }
                 }
             }
-            //plan.push(searchResult.path[i].action);
         }
         return plan;
     }
 
     function literalIsTheCase (n:WorldState, int : Interpreter.Literal):boolean{
         var adheres = true;
-        switch (int.relation){
-                        case "holding": if ((n.holding!==int.args[0] && int.polarity)||
-                                            (n.holding ==int.args[0] && !int.polarity))
-                                                adheres=false;
-                                        break;
-                        default:  adheres = Interpreter.isTrueRelation(int.args[0], int.args[1], int.relation, n);
-                                        break;
-                        //default: throw new Error("Missed a case: " + int.relation);
-                    }
+        if(int.relation == "holding"){
+            if ((n.holding!==int.args[0] && int.polarity)||
+                (n.holding ==int.args[0] && !int.polarity))
+                    adheres=false;
+        } else
+            adheres = Interpreter.isTrueRelation(int.args[0], int.args[1], int.relation, n);
         return adheres;
     }
     
@@ -256,25 +252,41 @@ module Planner {
         //all the objects.
         var objects: string[] = Array.prototype.concat.apply([], world.stacks);
         var thisObject = world.objects[object];
-        var sameKind : string[] = [];
-        //world.objects[identifier] hold all the information
-        //now we essentially filter out all objects of a different type from objects
+        var allObjects : ObjectDefinition[] = [];
         for (var i = 0; i<objects.length; i++){
-            if (thisObject.form == world.objects[objects[i]].form)
-                sameKind.push(objects[i]);
+                allObjects.push(world.objects[objects[i]]);
+        }
+        return describeInContext(thisObject, allObjects);
+        
+    }
+
+    //describes and object as concisely as possible in the context. Expects the object in the context as well.
+    export function describeInContext (thisObject:ObjectDefinition, context:ObjectDefinition[]):string{
+        var sameKind : ObjectDefinition[] = [];
+        for (var i = 0; i<context.length; i++){
+            if (thisObject.form==context[i].form)
+                sameKind.push(context[i]);
         }
         //if it is the only one of its kind, this is enough
         if (sameKind.length==1) return thisObject.form;
         //check if colour makes this a sufficient description
-        var onlyOne = true;
-        for (var i = 0; i<sameKind.length; i++)
-            onlyOne = !(thisObject.color == world.objects[objects[i]].color);
-        if (onlyOne) return thisObject.color + " " + thisObject.form;
-        onlyOne = true;
+        var same : ObjectDefinition[] = [];
+        for (var i = 0; i<sameKind.length; i++){
+            if (thisObject.color==context[i].color)
+                same.push(context[i]);
+        }
+        //if it is the only one of its colour, this is enough
+        if (same.length==1) return thisObject.color + " " + thisObject.form;
         //Do the same for size
-        for (var i = 0; i<sameKind.length; i++)
-            onlyOne = !(thisObject.size == world.objects[objects[i]].size);
-        if (onlyOne) return thisObject.size + " " + thisObject.form;
+
+        same = [];
+        for (var i = 0; i<sameKind.length; i++){
+            if (thisObject.size==context[i].size)
+                same.push(context[i]);
+        }
+        //if it is the only one of its size, this is enough
+        if (same.length==1) return thisObject.size + " " + thisObject.form;
+        
         //otherwise, return the whole description
         return thisObject.size + " " + thisObject.color + " " + thisObject.form;
     }
