@@ -272,7 +272,7 @@ module Planner {
         //check if colour makes this a sufficient description
         var same : ObjectDefinition[] = [];
         for (var i = 0; i<sameKind.length; i++){
-            if (thisObject.color==context[i].color)
+            if (thisObject.color==sameKind[i].color)
                 same.push(context[i]);
         }
         //if it is the only one of its colour, this is enough
@@ -281,7 +281,7 @@ module Planner {
 
         same = [];
         for (var i = 0; i<sameKind.length; i++){
-            if (thisObject.size==context[i].size)
+            if (thisObject.size==sameKind[i].size)
                 same.push(context[i]);
         }
         //if it is the only one of its size, this is enough
