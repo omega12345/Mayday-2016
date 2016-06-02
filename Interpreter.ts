@@ -99,12 +99,6 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     //////////////////////////////////////////////////////////////////////
     // private functions
     /**
-     * The core interpretation function. The code here is just a
-     * template; you should rewrite this function entirely. In this
-     * template, the code produces a dummy interpretation which is not
-     * connected to `cmd`, but your version of the function should
-     * analyse cmd in order to figure out what interpretation to
-     * return.
      * @param cmd The actual command. Note that it is *not* a string, but rather an object of type `Command` (as it has been parsed by the parser).
      * @param state The current state of the world. Useful to look up objects in the world.
      * @returns A list of list of Literal, representing a formula in disjunctive normal form (disjunction of conjunctions). See the dummy interpetation returned in the code for an example, which means ontop(a,floor) AND holding(b).
@@ -492,7 +486,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         var col: number = 0;
         var row: number = 0;
         if (state.holding == ident) {
-            var rowPos: number = Array.prototype.concat.apply([], [[1, 2, 3], [3, 4, 5]]).length;
+            var rowPos: number = Array.prototype.concat.apply([], state.stack).length;
             return [state.arm, rowPos];
         } else {
             for (var i = 0; i < stacks.length; i++) {
@@ -601,15 +595,3 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
     }
 
 }
-/*
-
-Thing to check:
-- put-commmand !!
-- floor handling is okey ?
-- 
-
-*/
-
-
-
-
