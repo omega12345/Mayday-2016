@@ -559,14 +559,32 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         //will always show in the entity to be handled, in the absence of examples to the contrary.
         var result : string = "Your statement is ambiguous. Do you want me to manipulate "
         
-        //var i:number;
-        //for (i = 0; i<input.length-1; i++)
-          //  var in = input[i].entity;
-            //ret += in. + Planner.describeInContext(objects[i], objects) + ", ";
-        //ret += " or the " + Planner.describeInContext(objects[i], objects) + "?";
-        throw "Your statement is ambiguous. Please clarify.";
+        var i:number;
+        for (i = 0; i<input.length-1; i++)
+            result += describeEntity(input[i].entity) + ", ";
+        result += " or " + describeEntity(input[i].entity) + "?";
+        throw result;
     }
 
+    function describeEntity(input : Parser.Entity):string{
+        return input.quantifier + " " + printObject(input.object);
+    }
+
+    function printObject (input : Parser.Object):string {
+        var ret = "";
+        if (input.size!==undefined &&input.size!==null)
+            ret += input.size + " ";
+        if (input.color!==undefined&&input.color!==null)
+            ret += input.color + " ";
+        if (input.form!==undefined&&input.form!==null && input.form!=="anyform")
+            ret += input.form;
+        if (input.form=="anyform") ret += "object";
+        if (input.object!==undefined){
+            ret += printObject(input.object) + " ";
+            ret += input.location.relation + " " + describeEntity (input.location.entity);
+        }
+        return ret;
+    }
     
     //throws an error specifying the differences between the objects in the input list.
     //The list must have at least two objects in it.
