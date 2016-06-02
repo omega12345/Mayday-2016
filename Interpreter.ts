@@ -486,7 +486,7 @@ Top-level function for the Interpreter. It calls `interpretCommand` for each pos
         var col: number = 0;
         var row: number = 0;
         if (state.holding == ident) {
-            var rowPos: number = Array.prototype.concat.apply([], state.stack).length;
+            var rowPos: number = Array.prototype.concat.apply([], state.stacks).length;
             return [state.arm, rowPos];
         } else {
             for (var i = 0; i < stacks.length; i++) {
